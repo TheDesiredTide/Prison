@@ -1,0 +1,136 @@
+--[[
+    Prison Life Hub (Combined)
+    Loads uwuware UI and integrates: Kill, Arrest, Noclip, Crim, AutoG, Laser, AutoRe, Kick, SilentAim.
+]]
+
+-- Load uwuware UI Library (using a known source)
+local Library = loadstring(game:HttpGet('https://raw.githubusercontent.com/Just-Egg-Salad/roblox-scripts/main/uwuware'))()
+
+-- Create the main window
+local Window = Library:CreateWindow("Prison Life Hub")
+
+-- Create tabs for different categories
+local CombatTab = Window:AddFolder("Combat")
+local MovementTab = Window:AddFolder("Movement")
+local TeamTab = Window:AddFolder("Team & Auto")
+local MiscTab = Window:AddFolder("Misc")
+
+-- === Helper Functions (Paste your existing code here) ===
+-- For brevity, I'll assume the functions from your files are defined here.
+-- In your final script, copy-paste the function definitions from Kill.lua,
+-- Arrest.lua, Noclip.lua, Crim.lua, AutoG.lua, Laser.lua, AutoRe.lua,
+-- Kick.lua, and SilentAim.lua into this section.
+
+-- Example: Assuming 'kill', 'arrest', 'noclip', 'autog', 'laser', 'autore', 'kick', 'silent' are defined.
+
+-- === Combat Tab ===
+CombatTab:AddToggle({
+    text = "Silent Aim",
+    flag = "silentAim",
+    callback = function(state)
+        if state then
+            getgenv().silent() -- From SilentAim.lua
+        else
+            getgenv().unsilent()
+        end
+    end
+})
+CombatTab:AddToggle({
+    text = "Laser (Auto Fire/No Spread)",
+    flag = "laser",
+    callback = function(state)
+        getgenv().laser(state) -- From Laser.lua
+    end
+})
+CombatTab:AddButton({
+    text = "Kill Player (Input Name)",
+    callback = function()
+        local name = Library:GetTextInput("Enter player name:", "Kill")
+        if name then
+            getgenv().kill(name) -- From Kill.lua
+        end
+    end
+})
+CombatTab:AddButton({
+    text = "Arrest Player (Input Name)",
+    callback = function()
+        local name = Library:GetTextInput("Enter player name:", "Arrest")
+        if name then
+            getgenv().arrest(name) -- From Arrest.lua
+        end
+    end
+})
+
+-- === Movement Tab ===
+MovementTab:AddToggle({
+    text = "Noclip",
+    flag = "noclip",
+    callback = function(state)
+        if state then
+            getgenv().noclip() -- From Noclip.lua
+        else
+            getgenv().unnoclip()
+        end
+    end
+})
+
+-- === Team & Auto Tab ===
+TeamTab:AddButton({
+    text = "Become Criminal",
+    callback = function()
+        getgenv().crim() -- From Crim.lua
+    end
+})
+TeamTab:AddToggle({
+    text = "Auto Guns",
+    flag = "autoG",
+    callback = function(state)
+        if state then
+            getgenv().autog() -- From AutoG.lua
+        else
+            getgenv().unautog()
+        end
+    end
+})
+TeamTab:AddToggle({
+    text = "Auto Respawn",
+    flag = "autoRe",
+    callback = function(state)
+        if state then
+            getgenv().autore() -- From AutoRe.lua
+        else
+            getgenv().unautore()
+        end
+    end
+})
+TeamTab:AddButton({
+    text = "Change Team (Inmates/Guards/Criminals)",
+    callback = function()
+        local team = Library:GetTextInput("Enter team name:", "Change Team")
+        if team then
+            getgenv().change(team) -- From AutoRe.lua/Arrest.lua
+        end
+    end
+})
+
+-- === Misc Tab ===
+MiscTab:AddButton({
+    text = "Car Kick Player (Input Name)",
+    callback = function()
+        local name = Library:GetTextInput("Enter player name:", "Car Kick")
+        if name then
+            getgenv().kick(name) -- From Kick.lua
+        end
+    end
+})
+MiscTab:AddButton({
+    text = "Stop Car Kick",
+    callback = function()
+        getgenv().unkick()
+    end
+})
+
+-- Initialize the UI
+Library:Init()
+
+print("[Prison Life Hub] Loaded successfully.")
