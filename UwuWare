@@ -1,136 +1,629 @@
 --[[
-    Prison Life Hub (MobileLinoriaLib Version)
-    Supports mobile + PC. Loads MobileLinoriaLib and integrates all features.
+    Monarch Hub - Native Mobile UI
+    Uses only Roblox built-in GUI. Works on mobile and PC.
+    Features: Kill, Arrest, Noclip, Crim, AutoG, Laser, AutoRe, Kick, SilentAim
 ]]
 
--- Load MobileLinoriaLib (mobile-compatible fork of Linoria)
-local repo = 'https://raw.githubusercontent.com/thehogbro-byte/MobileLinoriaLib/main/'
-local Library = loadstring(game:HttpGet(repo .. 'Library.lua'))()
-local ThemeManager = loadstring(game:HttpGet(repo .. 'addons/ThemeManager.lua'))()
-local SaveManager = loadstring(game:HttpGet(repo .. 'addons/SaveManager.lua'))()
+-- ========== YOUR FUNCTION DEFINITIONS ==========
+-- Paste all function definitions from your .lua files here.
+-- Make sure these are defined BEFORE the UI code below:
+--   kill(name), findpl(arg), change(team), invisible(), uninvisible()
+--   arrest(name), animh()
+--   noclip(), unnoclip()
+--   crim()
+--   autog(), unautog()
+--   laser(state), unlaser()
+--   autore(), unautore()
+--   kick(name), unkick()
+--   silent(), unsilent()
+-- ================================================
 
-local Window = Library:CreateWindow({
-    Title = 'Prison Life Hub',
-    Center = true,
-    AutoShow = true,
-    TabPadding = 8,
-    MenuFadeTime = 0.2,
-})
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
 
-local Tabs = {
-    Combat = Window:AddTab('Combat'),
-    Movement = Window:AddTab('Movement'),
-    Team = Window:AddTab('Team & Auto'),
-    Misc = Window:AddTab('Misc'),
-    ['UI Settings'] = Window:AddTab('UI Settings'),
-}
+local localp = Players.LocalPlayer
+local isMobile = UIS.TouchEnabled and not UIS.KeyboardEnabled
 
--- ========== PASTE YOUR FUNCTION DEFINITIONS HERE ==========
--- Copy the function definitions from Kill.lua, Arrest.lua, Noclip.lua,
--- Crim.lua, AutoG.lua, Laser.lua, AutoRe.lua, Kick.lua, and SilentAim.lua.
--- For example:
--- getgenv().kill = kill
--- getgenv().arrest = arrest
--- getgenv().noclip = noclip / unnoclip
--- getgenv().crim = crim
--- getgenv().autog = autog / unautog
--- getgenv().laser = laser / unlaser
--- getgenv().autore = autore / unautore
--- getgenv().kick = kick / unkick
--- getgenv().silent = silent / unsilent
--- =========================================================
+-- ========== UI STATE ==========
+local menuOpen = false
+local dragData = nil
+local ui = {}
+
+-- ========== CREATE MAIN GUI ==========
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "MonarchHub"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.IgnoreGuiInset = true
+screenGui.Parent = CoreGui
+
+-- Mobile toggle button (always visible)
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 50, 0, 50)
+toggleBtn.Position = UDim2.new(0, 10, 0.5, -25)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+toggleBtn.BackgroundTransparency = 0.2
+toggleBtn.BorderSizePixel = 0
+toggleBtn.Text = "☰"
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.TextSize = 24
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.Parent = screenGui
+toggleBtn.Visible = isMobile
+
+Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 12)
+
+-- Main menu frame
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 280, 0, 400)
+mainFrame.Position = UDim2.new(0.5, -140, 0.5, -200)
+mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui
+mainFrame.Visible = false
+ui.mainFrame = mainFrame
+
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 8)
+local mainStroke = Instance.new("UIStroke", mainFrame)
+mainStroke.Color = Color3.fromRGB(60, 60, 60)
+mainStroke.Thickness = 1
+
+-- Title bar
+local titleBar = Instance.new("TextButton")
+titleBar.Size = UDim2.new(1, 0, 0, 35)
+titleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+titleBar.BorderSizePixel = 0
+titleBar.Text = "  Monarch Hub"
+titleBar.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleBar.TextSize = 14
+titleBar.Font = Enum.Font.GothamBold
+titleBar.TextXAlignment = Enum.TextXAlignment.Left
+titleBar.Parent = mainFrame
+titleBar.AutoButtonColor = false
+
+Instance.new("UICorner", titleBar).CornerRadius = UDim.new(0, 8)
+
+-- Close button
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 30, 0, 30)
+closeBtn.Position = UDim2.new(1, -35, 0, 3)
+closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+closeBtn.BorderSizePixel = 0
+closeBtn.Text = "X"
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.TextSize = 14
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.Parent = titleBar
+
+Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 6)
+
+closeBtn.MouseButton1Click:Connect(function()
+    menuOpen = false
+    mainFrame.Visible = false
+end)
+
+-- Tab container
+local tabBar = Instance.new("Frame")
+tabBar.Size = UDim2.new(1, -10, 0, 30)
+tabBar.Position = UDim2.new(0, 5, 0, 40)
+tabBar.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+tabBar.BorderSizePixel = 0
+tabBar.Parent = mainFrame
+
+Instance.new("UICorner", tabBar).CornerRadius = UDim.new(0, 6)
+
+local tabLayout = Instance.new("UIListLayout", tabBar)
+tabLayout.FillDirection = Enum.FillDirection.Horizontal
+tabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+tabLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
+tabLayout.Padding = UDim.new(0, 2)
+
+-- Content container
+local contentFrame = Instance.new("ScrollingFrame")
+contentFrame.Size = UDim2.new(1, -10, 1, -80)
+contentFrame.Position = UDim2.new(0, 5, 0, 75)
+contentFrame.BackgroundTransparency = 1
+contentFrame.BorderSizePixel = 0
+contentFrame.ScrollBarThickness = 3
+contentFrame.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 80)
+contentFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+contentFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+contentFrame.Parent = mainFrame
+
+local contentLayout = Instance.new("UIListLayout", contentFrame)
+contentLayout.SortOrder = Enum.SortOrder.LayoutOrder
+contentLayout.Padding = UDim.new(0, 4)
+contentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+local contentPadding = Instance.new("UIPadding", contentFrame)
+contentPadding.PaddingTop = UDim.new(0, 4)
+contentPadding.PaddingBottom = UDim.new(0, 4)
+
+-- ========== DRAG LOGIC (MOBILE + PC) ==========
+local function setupDrag(frame)
+    local dragging = false
+    local startPos, startFramePos
+
+    local function beginDrag(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            startPos = input.Position
+            startFramePos = frame.Position
+        end
+    end
+
+    local function endDrag(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end
+
+    local function updateDrag(input)
+        if not dragging then return end
+        if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then return end
+        local delta = input.Position - startPos
+        frame.Position = UDim2.new(
+            startFramePos.X.Scale, startFramePos.X.Offset + delta.X,
+            startFramePos.Y.Scale, startFramePos.Y.Offset + delta.Y
+        )
+    end
+
+    frame.InputBegan:Connect(beginDrag)
+    frame.InputEnded:Connect(endDrag)
+    UIS.InputChanged:Connect(updateDrag)
+end
+
+setupDrag(titleBar)
+
+-- ========== UI HELPERS ==========
+local function createButton(text, callback, parent)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -8, 0, 32)
+    btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    btn.BorderSizePixel = 0
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(220, 220, 220)
+    btn.TextSize = 13
+    btn.Font = Enum.Font.Gotham
+    btn.Parent = parent
+    btn.AutoButtonColor = false
+
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+
+    local stroke = Instance.new("UIStroke", btn)
+    stroke.Color = Color3.fromRGB(60, 60, 60)
+    stroke.Thickness = 1
+
+    btn.MouseButton1Click:Connect(function()
+        local success, err = pcall(callback)
+        if not success then
+            warn("[Monarch Hub] Button error:", err)
+        end
+    end)
+
+    -- Mobile touch feedback
+    btn.MouseButton1Down:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(60, 60, 60)}):Play()
+    end)
+    btn.MouseButton1Up:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(40, 40, 40)}):Play()
+    end)
+
+    return btn
+end
+
+local function createToggle(text, default, callback, parent)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, -8, 0, 32)
+    frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    frame.BorderSizePixel = 0
+    frame.Parent = parent
+
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
+    local stroke = Instance.new("UIStroke", frame)
+    stroke.Color = Color3.fromRGB(60, 60, 60)
+    stroke.Thickness = 1
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -50, 1, 0)
+    label.Position = UDim2.new(0, 10, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = Color3.fromRGB(220, 220, 220)
+    label.TextSize = 13
+    label.Font = Enum.Font.Gotham
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = frame
+
+    local toggleBtn = Instance.new("TextButton")
+    toggleBtn.Size = UDim2.new(0, 36, 0, 20)
+    toggleBtn.Position = UDim2.new(1, -44, 0.5, -10)
+    toggleBtn.BackgroundColor3 = default and Color3.fromRGB(50, 200, 100) or Color3.fromRGB(70, 70, 70)
+    toggleBtn.BorderSizePixel = 0
+    toggleBtn.Text = ""
+    toggleBtn.Parent = frame
+    toggleBtn.AutoButtonColor = false
+
+    Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(1, 0)
+
+    local knob = Instance.new("Frame")
+    knob.Size = UDim2.new(0, 16, 0, 16)
+    knob.Position = default and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+    knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    knob.BorderSizePixel = 0
+    knob.Parent = toggleBtn
+
+    Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+
+    local state = default
+
+    local function setState(newState, fireCallback)
+        state = newState
+        TweenService:Create(toggleBtn, TweenInfo.new(0.15), {
+            BackgroundColor3 = state and Color3.fromRGB(50, 200, 100) or Color3.fromRGB(70, 70, 70)
+        }):Play()
+        TweenService:Create(knob, TweenInfo.new(0.15), {
+            Position = state and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+        }):Play()
+        if fireCallback then
+            local success, err = pcall(callback, state)
+            if not success then
+                warn("[Monarch Hub] Toggle error:", err)
+            end
+        end
+    end
+
+    toggleBtn.MouseButton1Click:Connect(function()
+        setState(not state, true)
+    end)
+
+    -- Mobile touch support
+    toggleBtn.TouchTap:Connect(function()
+        setState(not state, true)
+    end)
+
+    return {setState = setState, getState = function() return state end}
+end
+
+-- ========== PROMPT SYSTEM (for text input on mobile) ==========
+local promptGui = Instance.new("ScreenGui")
+promptGui.Name = "MonarchPrompt"
+promptGui.ResetOnSpawn = false
+promptGui.Parent = CoreGui
+
+local promptOverlay = Instance.new("TextButton")
+promptOverlay.Size = UDim2.new(1, 0, 1, 0)
+promptOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+promptOverlay.BackgroundTransparency = 0.5
+promptOverlay.BorderSizePixel = 0
+promptOverlay.Text = ""
+promptOverlay.Parent = promptGui
+promptOverlay.Visible = false
+
+local promptFrame = Instance.new("Frame")
+promptFrame.Size = UDim2.new(0, 250, 0, 150)
+promptFrame.Position = UDim2.new(0.5, -125, 0.5, -75)
+promptFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+promptFrame.BorderSizePixel = 0
+promptFrame.Parent = promptGui
+promptFrame.Visible = false
+
+Instance.new("UICorner", promptFrame).CornerRadius = UDim.new(0, 8)
+local promptStroke = Instance.new("UIStroke", promptFrame)
+promptStroke.Color = Color3.fromRGB(60, 60, 60)
+promptStroke.Thickness = 1
+
+local promptTitle = Instance.new("TextLabel")
+promptTitle.Size = UDim2.new(1, -20, 0, 30)
+promptTitle.Position = UDim2.new(0, 10, 0, 10)
+promptTitle.BackgroundTransparency = 1
+promptTitle.Text = "Enter name:"
+promptTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+promptTitle.TextSize = 14
+promptTitle.Font = Enum.Font.GothamBold
+promptTitle.TextXAlignment = Enum.TextXAlignment.Left
+promptTitle.Parent = promptFrame
+
+local promptInput = Instance.new("TextBox")
+promptInput.Size = UDim2.new(1, -20, 0, 32)
+promptInput.Position = UDim2.new(0, 10, 0, 45)
+promptInput.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+promptInput.BorderSizePixel = 0
+promptInput.Text = ""
+promptInput.PlaceholderText = "Player name..."
+promptInput.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
+promptInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+promptInput.TextSize = 13
+promptInput.Font = Enum.Font.Gotham
+promptInput.Parent = promptFrame
+
+Instance.new("UICorner", promptInput).CornerRadius = UDim.new(0, 6)
+
+local promptConfirm = Instance.new("TextButton")
+promptConfirm.Size = UDim2.new(0, 100, 0, 30)
+promptConfirm.Position = UDim2.new(0.5, 5, 1, -40)
+promptConfirm.BackgroundColor3 = Color3.fromRGB(50, 200, 100)
+promptConfirm.BorderSizePixel = 0
+promptConfirm.Text = "Confirm"
+promptConfirm.TextColor3 = Color3.fromRGB(255, 255, 255)
+promptConfirm.TextSize = 13
+promptConfirm.Font = Enum.Font.GothamBold
+promptConfirm.Parent = promptFrame
+
+Instance.new("UICorner", promptConfirm).CornerRadius = UDim.new(0, 6)
+
+local promptCancel = Instance.new("TextButton")
+promptCancel.Size = UDim2.new(0, 100, 0, 30)
+promptCancel.Position = UDim2.new(0.5, -105, 1, -40)
+promptCancel.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+promptCancel.BorderSizePixel = 0
+promptCancel.Text = "Cancel"
+promptCancel.TextColor3 = Color3.fromRGB(255, 255, 255)
+promptCancel.TextSize = 13
+promptCancel.Font = Enum.Font.GothamBold
+promptCancel.Parent = promptFrame
+
+Instance.new("UICorner", promptCancel).CornerRadius = UDim.new(0, 6)
+
+local promptCallback = nil
+
+local function showPrompt(title, placeholder, callback)
+    promptTitle.Text = title or "Enter name:"
+    promptInput.Text = ""
+    promptInput.PlaceholderText = placeholder or "Player name..."
+    promptCallback = callback
+    promptOverlay.Visible = true
+    promptFrame.Visible = true
+    if isMobile then
+        promptInput:CaptureFocus()
+    end
+end
+
+local function hidePrompt()
+    promptOverlay.Visible = false
+    promptFrame.Visible = false
+    promptCallback = nil
+    promptInput:ReleaseFocus()
+end
+
+promptConfirm.MouseButton1Click:Connect(function()
+    local text = promptInput.Text
+    local cb = promptCallback
+    hidePrompt()
+    if cb and text and text ~= "" then
+        local success, err = pcall(cb, text)
+        if not success then warn("[Monarch Hub] Prompt error:", err) end
+    end
+end)
+
+promptCancel.MouseButton1Click:Connect(hidePrompt)
+promptOverlay.MouseButton1Click:Connect(hidePrompt)
+
+-- ========== TAB SYSTEM ==========
+local tabs = {}
+local currentTab = nil
+
+local function createTab(name, icon)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.25, -2, 1, 0)
+    btn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    btn.BackgroundTransparency = 1
+    btn.BorderSizePixel = 0
+    btn.Text = name
+    btn.TextColor3 = Color3.fromRGB(150, 150, 150)
+    btn.TextSize = 11
+    btn.Font = Enum.Font.GothamBold
+    btn.Parent = tabBar
+    btn.AutoButtonColor = false
+
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+
+    local page = Instance.new("Frame")
+    page.Size = UDim2.new(1, 0, 1, 0)
+    page.BackgroundTransparency = 1
+    page.BorderSizePixel = 0
+    page.Parent = contentFrame
+    page.Visible = false
+
+    local pageLayout = Instance.new("UIListLayout", page)
+    pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    pageLayout.Padding = UDim.new(0, 4)
+
+    local tab = {button = btn, page = page, name = name}
+    table.insert(tabs, tab)
+
+    btn.MouseButton1Click:Connect(function()
+        for _, t in ipairs(tabs) do
+            t.button.TextColor3 = Color3.fromRGB(150, 150, 150)
+            t.button.BackgroundTransparency = 1
+            t.page.Visible = false
+        end
+        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        btn.BackgroundTransparency = 0
+        btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        page.Visible = true
+        currentTab = tab
+    end)
+
+    return tab
+end
+
+local CombatTab = createTab("Combat")
+local MovementTab = createTab("Move")
+local TeamTab = createTab("Team")
+local MiscTab = createTab("Misc")
+
+-- Initialize first tab
+CombatTab.button:Fire("MouseButton1Click")
+
+-- ========== POPULATE TABS ==========
 
 -- Combat Tab
-local CombatGroup = Tabs.Combat:AddLeftGroupbox('Combat')
+local CombatGroup = Instance.new("Frame")
+CombatGroup.Size = UDim2.new(1, -8, 0, 0)
+CombatGroup.BackgroundTransparency = 1
+CombatGroup.Parent = CombatTab.page
+local cgLayout = Instance.new("UIListLayout", CombatGroup)
+cgLayout.SortOrder = Enum.SortOrder.LayoutOrder
+cgLayout.Padding = UDim.new(0, 4)
+CombatGroup.AutomaticSize = Enum.AutomaticSize.Y
 
-CombatGroup:AddToggle('SilentAim', {
-    Text = 'Silent Aim',
-    Default = false,
-    Tooltip = 'Bullets redirect to closest target head',
-}):OnChanged(function(state)
-    if state then getgenv().silent() else getgenv().unsilent() end
-end)
+local function addLabel(parent, text)
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 0, 20)
+    label.BackgroundTransparency = 1
+    label.Text = "  " .. text
+    label.TextColor3 = Color3.fromRGB(120, 120, 120)
+    label.TextSize = 10
+    label.Font = Enum.Font.GothamBold
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = parent
+    return label
+end
 
-CombatGroup:AddToggle('Laser', {
-    Text = 'Laser (Auto Fire/No Spread)',
-    Default = false,
-}):OnChanged(function(state)
-    getgenv().laser(state)
-end)
+addLabel(CombatGroup, "SILENT AIM")
 
-CombatGroup:AddButton('Kill Player', function()
-    local name = Library:GetTextInput('Enter player name:', 'Kill')
-    if name then getgenv().kill(name) end
-end)
+createToggle("Silent Aim", false, function(state)
+    if state then silent() else unsilent() end
+end, CombatGroup)
 
-CombatGroup:AddButton('Arrest Player', function()
-    local name = Library:GetTextInput('Enter player name:', 'Arrest')
-    if name then getgenv().arrest(name) end
-end)
+createToggle("Laser (Auto/No Spread)", false, function(state)
+    laser(state)
+end, CombatGroup)
+
+addLabel(CombatGroup, "PLAYER ACTIONS")
+
+createButton("Kill Player", function()
+    showPrompt("Kill Player - Enter Name:", "Player name...", function(name)
+        kill(name)
+    end)
+end, CombatGroup)
+
+createButton("Arrest Player", function()
+    showPrompt("Arrest Player - Enter Name:", "Player name...", function(name)
+        arrest(name)
+    end)
+end, CombatGroup)
 
 -- Movement Tab
-local MoveGroup = Tabs.Movement:AddLeftGroupbox('Movement')
+local MoveGroup = Instance.new("Frame")
+MoveGroup.Size = UDim2.new(1, -8, 0, 0)
+MoveGroup.BackgroundTransparency = 1
+MoveGroup.Parent = MovementTab.page
+local mgLayout = Instance.new("UIListLayout", MoveGroup)
+mgLayout.SortOrder = Enum.SortOrder.LayoutOrder
+mgLayout.Padding = UDim.new(0, 4)
+MoveGroup.AutomaticSize = Enum.AutomaticSize.Y
 
-MoveGroup:AddToggle('Noclip', {
-    Text = 'Noclip',
-    Default = false,
-}):OnChanged(function(state)
-    if state then getgenv().noclip() else getgenv().unnoclip() end
-end)
+addLabel(MoveGroup, "MOVEMENT")
 
--- Team & Auto Tab
-local TeamGroup = Tabs.Team:AddLeftGroupbox('Team')
+createToggle("Noclip", false, function(state)
+    if state then noclip() else unnoclip() end
+end, MoveGroup)
 
-TeamGroup:AddButton('Become Criminal', function()
-    getgenv().crim()
-end)
+-- Team Tab
+local TeamGroup = Instance.new("Frame")
+TeamGroup.Size = UDim2.new(1, -8, 0, 0)
+TeamGroup.BackgroundTransparency = 1
+TeamGroup.Parent = TeamTab.page
+local tgLayout = Instance.new("UIListLayout", TeamGroup)
+tgLayout.SortOrder = Enum.SortOrder.LayoutOrder
+tgLayout.Padding = UDim.new(0, 4)
+TeamGroup.AutomaticSize = Enum.AutomaticSize.Y
 
-TeamGroup:AddButton('Change Team', function()
-    local team = Library:GetTextInput('Enter team (Inmates/Guards/Criminals):', 'Change Team')
-    if team then getgenv().change(team) end
-end)
+addLabel(TeamGroup, "TEAM")
 
-TeamGroup:AddToggle('AutoGuns', {
-    Text = 'Auto Guns (AK-47 + Remington)',
-    Default = false,
-}):OnChanged(function(state)
-    if state then getgenv().autog() else getgenv().unautog() end
-end)
+createButton("Become Criminal", function()
+    crim()
+end, TeamGroup)
 
-TeamGroup:AddToggle('AutoRespawn', {
-    Text = 'Auto Respawn',
-    Default = false,
-}):OnChanged(function(state)
-    if state then getgenv().autore() else getgenv().unautore() end
-end)
+createButton("Change Team", function()
+    showPrompt("Change Team - Enter Team:", "Inmates / Guards / Criminals", function(teamName)
+        change(teamName)
+    end)
+end, TeamGroup)
+
+addLabel(TeamGroup, "AUTOMATION")
+
+createToggle("Auto Guns (AK + Remington)", false, function(state)
+    if state then autog() else unautog() end
+end, TeamGroup)
+
+createToggle("Auto Respawn", false, function(state)
+    if state then autore() else unautore() end
+end, TeamGroup)
 
 -- Misc Tab
-local MiscGroup = Tabs.Misc:AddLeftGroupbox('Misc')
+local MiscGroup = Instance.new("Frame")
+MiscGroup.Size = UDim2.new(1, -8, 0, 0)
+MiscGroup.BackgroundTransparency = 1
+MiscGroup.Parent = MiscTab.page
+local miscLayout = Instance.new("UIListLayout", MiscGroup)
+miscLayout.SortOrder = Enum.SortOrder.LayoutOrder
+miscLayout.Padding = UDim.new(0, 4)
+MiscGroup.AutomaticSize = Enum.AutomaticSize.Y
 
-MiscGroup:AddButton('Car Kick Player', function()
-    local name = Library:GetTextInput('Enter player name:', 'Car Kick')
-    if name then getgenv().kick(name) end
+addLabel(MiscGroup, "CAR KICK")
+
+createButton("Car Kick Player", function()
+    showPrompt("Car Kick - Enter Name:", "Player name...", function(name)
+        kick(name)
+    end)
+end, MiscGroup)
+
+createButton("Stop Car Kick", function()
+    unkick()
+end, MiscGroup)
+
+addLabel(MiscGroup, "UNLOAD")
+
+createButton("Unload Script", function()
+    screenGui:Destroy()
+    promptGui:Destroy()
+    getgenv().kill = nil
+    getgenv().arrest = nil
+    getgenv().noclip = nil
+    getgenv().crim = nil
+    getgenv().autog = nil
+    getgenv().laser = nil
+    getgenv().autore = nil
+    getgenv().kick = nil
+    getgenv().silent = nil
+    print("[Monarch Hub] Unloaded.")
+end, MiscGroup)
+
+-- ========== TOGGLE MENU ==========
+local function toggleMenu()
+    menuOpen = not menuOpen
+    mainFrame.Visible = menuOpen
+    if menuOpen then
+        mainFrame.Size = UDim2.new(0, 280, 0, 400)
+    end
+end
+
+toggleBtn.MouseButton1Click:Connect(toggleMenu)
+toggleBtn.TouchTap:Connect(toggleMenu)
+
+-- PC keybind (RightShift)
+UIS.InputBegan:Connect(function(input, processed)
+    if processed then return end
+    if input.KeyCode == Enum.KeyCode.RightShift then
+        toggleMenu()
+    end
 end)
 
-MiscGroup:AddButton('Stop Car Kick', function()
-    getgenv().unkick()
-end)
+-- Initial state
+if isMobile then
+    toggleBtn.Visible = true
+    mainFrame.Visible = false
+else
+    toggleBtn.Visible = true
+    mainFrame.Visible = true
+    menuOpen = true
+end
 
--- UI Settings (standard Linoria config)
-local MenuGroup = Tabs['UI Settings']:AddLeftGroupbox('Menu')
-MenuGroup:AddButton('Unload', function() Library:Unload() end)
-MenuGroup:AddLabel('Menu bind'):AddKeyPicker('MenuKeybind', { Default = 'End', NoUI = true, Text = 'Menu keybind' })
-
-Library.ToggleKeybind = Options.MenuKeybind
-
--- Addons
-ThemeManager:SetLibrary(Library)
-SaveManager:SetLibrary(Library)
-SaveManager:IgnoreThemeSettings()
-SaveManager:SetIgnoreIndexes({ 'MenuKeybind' })
-ThemeManager:SetFolder('PrisonLifeHub')
-SaveManager:SetFolder('PrisonLifeHub/prison-life')
-SaveManager:BuildConfigSection(Tabs['UI Settings'])
-ThemeManager:ApplyToTab(Tabs['UI Settings'])
-
-print('[Prison Life Hub] Loaded with MobileLinoriaLib.')
+print("[Monarch Hub] Native mobile UI loaded.")
+print("  Mobile: Tap ☰ button | PC: RightShift to toggle menu")
