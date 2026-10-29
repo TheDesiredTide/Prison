@@ -1,136 +1,136 @@
 --[[
-    Prison Life Hub (Combined)
-    Loads uwuware UI and integrates: Kill, Arrest, Noclip, Crim, AutoG, Laser, AutoRe, Kick, SilentAim.
+    Prison Life Hub (MobileLinoriaLib Version)
+    Supports mobile + PC. Loads MobileLinoriaLib and integrates all features.
 ]]
 
--- Load uwuware UI Library (using a known source)
-local Library = loadstring(game:HttpGet('https://raw.githubusercontent.com/Just-Egg-Salad/roblox-scripts/main/uwuware'))()
+-- Load MobileLinoriaLib (mobile-compatible fork of Linoria)
+local repo = 'https://raw.githubusercontent.com/thehogbro-byte/MobileLinoriaLib/main/'
+local Library = loadstring(game:HttpGet(repo .. 'Library.lua'))()
+local ThemeManager = loadstring(game:HttpGet(repo .. 'addons/ThemeManager.lua'))()
+local SaveManager = loadstring(game:HttpGet(repo .. 'addons/SaveManager.lua'))()
 
--- Create the main window
-local Window = Library:CreateWindow("Prison Life Hub")
-
--- Create tabs for different categories
-local CombatTab = Window:AddFolder("Combat")
-local MovementTab = Window:AddFolder("Movement")
-local TeamTab = Window:AddFolder("Team & Auto")
-local MiscTab = Window:AddFolder("Misc")
-
--- === Helper Functions (Paste your existing code here) ===
--- For brevity, I'll assume the functions from your files are defined here.
--- In your final script, copy-paste the function definitions from Kill.lua,
--- Arrest.lua, Noclip.lua, Crim.lua, AutoG.lua, Laser.lua, AutoRe.lua,
--- Kick.lua, and SilentAim.lua into this section.
-
--- Example: Assuming 'kill', 'arrest', 'noclip', 'autog', 'laser', 'autore', 'kick', 'silent' are defined.
-
--- === Combat Tab ===
-CombatTab:AddToggle({
-    text = "Silent Aim",
-    flag = "silentAim",
-    callback = function(state)
-        if state then
-            getgenv().silent() -- From SilentAim.lua
-        else
-            getgenv().unsilent()
-        end
-    end
-})
-CombatTab:AddToggle({
-    text = "Laser (Auto Fire/No Spread)",
-    flag = "laser",
-    callback = function(state)
-        getgenv().laser(state) -- From Laser.lua
-    end
-})
-CombatTab:AddButton({
-    text = "Kill Player (Input Name)",
-    callback = function()
-        local name = Library:GetTextInput("Enter player name:", "Kill")
-        if name then
-            getgenv().kill(name) -- From Kill.lua
-        end
-    end
-})
-CombatTab:AddButton({
-    text = "Arrest Player (Input Name)",
-    callback = function()
-        local name = Library:GetTextInput("Enter player name:", "Arrest")
-        if name then
-            getgenv().arrest(name) -- From Arrest.lua
-        end
-    end
+local Window = Library:CreateWindow({
+    Title = 'Prison Life Hub',
+    Center = true,
+    AutoShow = true,
+    TabPadding = 8,
+    MenuFadeTime = 0.2,
 })
 
--- === Movement Tab ===
-MovementTab:AddToggle({
-    text = "Noclip",
-    flag = "noclip",
-    callback = function(state)
-        if state then
-            getgenv().noclip() -- From Noclip.lua
-        else
-            getgenv().unnoclip()
-        end
-    end
-})
+local Tabs = {
+    Combat = Window:AddTab('Combat'),
+    Movement = Window:AddTab('Movement'),
+    Team = Window:AddTab('Team & Auto'),
+    Misc = Window:AddTab('Misc'),
+    ['UI Settings'] = Window:AddTab('UI Settings'),
+}
 
--- === Team & Auto Tab ===
-TeamTab:AddButton({
-    text = "Become Criminal",
-    callback = function()
-        getgenv().crim() -- From Crim.lua
-    end
-})
-TeamTab:AddToggle({
-    text = "Auto Guns",
-    flag = "autoG",
-    callback = function(state)
-        if state then
-            getgenv().autog() -- From AutoG.lua
-        else
-            getgenv().unautog()
-        end
-    end
-})
-TeamTab:AddToggle({
-    text = "Auto Respawn",
-    flag = "autoRe",
-    callback = function(state)
-        if state then
-            getgenv().autore() -- From AutoRe.lua
-        else
-            getgenv().unautore()
-        end
-    end
-})
-TeamTab:AddButton({
-    text = "Change Team (Inmates/Guards/Criminals)",
-    callback = function()
-        local team = Library:GetTextInput("Enter team name:", "Change Team")
-        if team then
-            getgenv().change(team) -- From AutoRe.lua/Arrest.lua
-        end
-    end
-})
+-- ========== PASTE YOUR FUNCTION DEFINITIONS HERE ==========
+-- Copy the function definitions from Kill.lua, Arrest.lua, Noclip.lua,
+-- Crim.lua, AutoG.lua, Laser.lua, AutoRe.lua, Kick.lua, and SilentAim.lua.
+-- For example:
+-- getgenv().kill = kill
+-- getgenv().arrest = arrest
+-- getgenv().noclip = noclip / unnoclip
+-- getgenv().crim = crim
+-- getgenv().autog = autog / unautog
+-- getgenv().laser = laser / unlaser
+-- getgenv().autore = autore / unautore
+-- getgenv().kick = kick / unkick
+-- getgenv().silent = silent / unsilent
+-- =========================================================
 
--- === Misc Tab ===
-MiscTab:AddButton({
-    text = "Car Kick Player (Input Name)",
-    callback = function()
-        local name = Library:GetTextInput("Enter player name:", "Car Kick")
-        if name then
-            getgenv().kick(name) -- From Kick.lua
-        end
-    end
-})
-MiscTab:AddButton({
-    text = "Stop Car Kick",
-    callback = function()
-        getgenv().unkick()
-    end
-})
+-- Combat Tab
+local CombatGroup = Tabs.Combat:AddLeftGroupbox('Combat')
 
--- Initialize the UI
-Library:Init()
+CombatGroup:AddToggle('SilentAim', {
+    Text = 'Silent Aim',
+    Default = false,
+    Tooltip = 'Bullets redirect to closest target head',
+}):OnChanged(function(state)
+    if state then getgenv().silent() else getgenv().unsilent() end
+end)
 
-print("[Prison Life Hub] Loaded successfully.")
+CombatGroup:AddToggle('Laser', {
+    Text = 'Laser (Auto Fire/No Spread)',
+    Default = false,
+}):OnChanged(function(state)
+    getgenv().laser(state)
+end)
+
+CombatGroup:AddButton('Kill Player', function()
+    local name = Library:GetTextInput('Enter player name:', 'Kill')
+    if name then getgenv().kill(name) end
+end)
+
+CombatGroup:AddButton('Arrest Player', function()
+    local name = Library:GetTextInput('Enter player name:', 'Arrest')
+    if name then getgenv().arrest(name) end
+end)
+
+-- Movement Tab
+local MoveGroup = Tabs.Movement:AddLeftGroupbox('Movement')
+
+MoveGroup:AddToggle('Noclip', {
+    Text = 'Noclip',
+    Default = false,
+}):OnChanged(function(state)
+    if state then getgenv().noclip() else getgenv().unnoclip() end
+end)
+
+-- Team & Auto Tab
+local TeamGroup = Tabs.Team:AddLeftGroupbox('Team')
+
+TeamGroup:AddButton('Become Criminal', function()
+    getgenv().crim()
+end)
+
+TeamGroup:AddButton('Change Team', function()
+    local team = Library:GetTextInput('Enter team (Inmates/Guards/Criminals):', 'Change Team')
+    if team then getgenv().change(team) end
+end)
+
+TeamGroup:AddToggle('AutoGuns', {
+    Text = 'Auto Guns (AK-47 + Remington)',
+    Default = false,
+}):OnChanged(function(state)
+    if state then getgenv().autog() else getgenv().unautog() end
+end)
+
+TeamGroup:AddToggle('AutoRespawn', {
+    Text = 'Auto Respawn',
+    Default = false,
+}):OnChanged(function(state)
+    if state then getgenv().autore() else getgenv().unautore() end
+end)
+
+-- Misc Tab
+local MiscGroup = Tabs.Misc:AddLeftGroupbox('Misc')
+
+MiscGroup:AddButton('Car Kick Player', function()
+    local name = Library:GetTextInput('Enter player name:', 'Car Kick')
+    if name then getgenv().kick(name) end
+end)
+
+MiscGroup:AddButton('Stop Car Kick', function()
+    getgenv().unkick()
+end)
+
+-- UI Settings (standard Linoria config)
+local MenuGroup = Tabs['UI Settings']:AddLeftGroupbox('Menu')
+MenuGroup:AddButton('Unload', function() Library:Unload() end)
+MenuGroup:AddLabel('Menu bind'):AddKeyPicker('MenuKeybind', { Default = 'End', NoUI = true, Text = 'Menu keybind' })
+
+Library.ToggleKeybind = Options.MenuKeybind
+
+-- Addons
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({ 'MenuKeybind' })
+ThemeManager:SetFolder('PrisonLifeHub')
+SaveManager:SetFolder('PrisonLifeHub/prison-life')
+SaveManager:BuildConfigSection(Tabs['UI Settings'])
+ThemeManager:ApplyToTab(Tabs['UI Settings'])
+
+print('[Prison Life Hub] Loaded with MobileLinoriaLib.')
