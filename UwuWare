@@ -1,21 +1,7 @@
 --[[
-    Monarch Hub - uwuware 2.x with touch patch
-    Loads uwuware, patches mobile input, wires in all 9 Prison Life features.
+    Monarch Hub - Native UI (Final)
+    All 9 features. Works on mobile + PC. No external library.
 ]]
-
--- ========== LOAD UWUWARE ==========
-local Library
-do
-    local src = game:HttpGet('https://raw.githubusercontent.com/Stefanuk12/UI-Libraries/master/scripts/uwuware-2.x.lua')
-    -- Patch: make every MouseButton1 / MouseMovement check also accept Touch
-    src = src:gsub('UserInputType%.MouseButton1', '(UserInputType.MouseButton1 or UserInputType.Touch)')
-    src = src:gsub('UserInputType%.MouseMovement', '(UserInputType.MouseMovement or UserInputType.Touch)')
-    src = src:gsub('input%.UserInputType%.Name == "MouseButton1"', '((input.UserInputType.Name == "MouseButton1") or (input.UserInputType.Name == "Touch"))')
-    src = src:gsub('input%.UserInputType%.Name == "MouseMovement"', '((input.UserInputType.Name == "MouseMovement") or (input.UserInputType.Name == "Touch"))')
-    src = src:gsub('Input%.UserInputType%.Name == "MouseButton1"', '((Input.UserInputType.Name == "MouseButton1") or (Input.UserInputType.Name == "Touch"))')
-    src = src:gsub('Input%.UserInputType%.Name == "MouseMovement"', '((Input.UserInputType.Name == "MouseMovement") or (Input.UserInputType.Name == "Touch"))')
-    Library = loadstring(src)()
-end
 
 -- ========== SERVICES ==========
 local Players = game:GetService("Players")
@@ -25,6 +11,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
 local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
 
 local localp = Players.LocalPlayer
 local storage = ReplicatedStorage
@@ -78,13 +66,18 @@ local function findpl(arg)
         if p ~= localp then
             local name = p.Name:lower()
             local display = (p.DisplayName or ""):lower():gsub("%s+", "")
-            if name == arg or display == arg then table.insert(exact, p)
-            elseif name:sub(1, #arg) == arg or display:sub(1, #arg) == arg then table.insert(prefix, p) end
+            if name == arg or display == arg then
+                table.insert(exact, p)
+            elseif name:sub(1, #arg) == arg or display:sub(1, #arg) == arg then
+                table.insert(prefix, p)
+            end
         end
     end
     local candidates = #exact > 0 and exact or prefix
     if #candidates == 0 then return nil, 'Player "' .. arg .. '" Not Found' end
-    if #candidates > 1 then table.sort(candidates, function(a, b) return #a.Name < #b.Name end) end
+    if #candidates > 1 then
+        table.sort(candidates, function(a, b) return #a.Name < #b.Name end)
+    end
     return candidates[1]
 end
 
@@ -103,7 +96,8 @@ local function change(teamn)
             Event:InvokeServer(team.Neutral, 1)
             Event:InvokeServer(team.Inmates, 1)
             if localp.PlayerGui.Home.IntroFrame.ContentBackground.MainMenuFrame.TeamsFrame.Inmates.Button.TextLabel.Text ~= "Join" then
-                notify("Monarch Hub", "Team full cant do", 5) break
+                notify("Monarch Hub", "Team full cant do", 5)
+                break
             end
         until localp.Team and localp.Team.Name == "Inmates"
     elseif teamn == "Guards" then
@@ -112,7 +106,8 @@ local function change(teamn)
             Event:InvokeServer(team.Neutral, 1)
             Event:InvokeServer(team.Guards, 1)
             if localp.PlayerGui.Home.IntroFrame.ContentBackground.MainMenuFrame.TeamsFrame.Guards.Button.TextLabel.Text ~= "Join" then
-                notify("Monarch Hub", "Team full cant do", 5) break
+                notify("Monarch Hub", "Team full cant do", 5)
+                break
             end
         until localp.Team and localp.Team.Name == "Guards"
     elseif teamn == "Criminals" then
@@ -121,7 +116,8 @@ local function change(teamn)
             Event:InvokeServer(team.Neutral, 1)
             Event:InvokeServer(team.Inmates, 1)
             if localp.PlayerGui.Home.IntroFrame.ContentBackground.MainMenuFrame.TeamsFrame.Inmates.Button.TextLabel.Text ~= "Join" then
-                notify("Monarch Hub", "Team full cant do", 5) break
+                notify("Monarch Hub", "Team full cant do", 5)
+                break
             end
         until localp.Team and localp.Team.Name == "Inmates"
         task.wait(0.1)
@@ -130,18 +126,22 @@ local function change(teamn)
     end
 end
 
--- ========== KILL (with invisible) ==========
+-- ========== KILL ==========
 local invisiblebool, invisibleconn, invisiblebind, invisanimtrack, invisoldcf = false, nil, nil, nil, nil
 
 local function animationTrickery()
-    local ch = getch() local hm = gethm()
+    local ch = getch()
+    local hm = gethm()
     if not ch or not hm then return end
     local isR15 = hm.RigType == Enum.HumanoidRigType.R15
     local anim = Instance.new("Animation")
     anim.AnimationId = "rbxassetid://" .. (isR15 and "18665825805" or "215384594")
     local animator = hm:FindFirstChildOfClass("Animator") or hm:WaitForChild("Animator", 3)
     if not animator then return end
-    if invisanimtrack then pcall(function() invisanimtrack:Stop() invisanimtrack:Destroy() end) invisanimtrack = nil end
+    if invisanimtrack then
+        pcall(function() invisanimtrack:Stop() invisanimtrack:Destroy() end)
+        invisanimtrack = nil
+    end
     invisanimtrack = animator:LoadAnimation(anim)
     invisanimtrack.Priority = Enum.AnimationPriority.Action4
     invisanimtrack:Play(0, 0.001, 0)
@@ -156,7 +156,8 @@ end
 
 local function invisible()
     if invisiblebool then return end
-    invisiblebool = true invisoldcf = nil
+    invisiblebool = true
+    invisoldcf = nil
     animationTrickery()
     local bindKey = "Invis_" .. tostring(tick())
     invisiblebind = bindKey
@@ -174,7 +175,8 @@ local function invisible()
     if invisibleconn then invisibleconn:Disconnect() invisibleconn = nil end
     invisibleconn = RunService.Heartbeat:Connect(function()
         if not invisiblebool then return end
-        local ch = localp.Character if not ch then return end
+        local ch = localp.Character
+        if not ch then return end
         local hm = ch:FindFirstChildOfClass("Humanoid")
         local root = ch:FindFirstChild("HumanoidRootPart")
         if not (hm and root) then return end
@@ -184,7 +186,25 @@ local function invisible()
         invisoldcf = root.CFrame
         root.CFrame = (root.CFrame - offset) * CFrame.Angles(math.rad(isR15 and 180 or 90), 0, 0)
         if invisanimtrack then
-            pcall(function() invisanimtrack:AdjustWeight(100) invisanimtrack:AdjustSpeed(0) end)
+            pcall(function()
+                invisanimtrack:AdjustWeight(100)
+                invisanimtrack:AdjustSpeed(0)
+            end)
+        end
+    end)
+    task.spawn(function()
+        while invisiblebool do
+            local ch = localp.Character
+            if ch then
+                local hm = ch:FindFirstChildOfClass("Humanoid")
+                if hm then
+                    hm.Died:Wait()
+                    if not invisiblebool then break end
+                    task.wait(Players.RespawnTime + 0.8)
+                    if invisiblebool then animationTrickery() end
+                end
+            end
+            task.wait(0.5)
         end
     end)
     notify("Monarch Hub", "Invisible Enabled", 3)
@@ -194,8 +214,14 @@ local function uninvisible()
     if not invisiblebool then return end
     invisiblebool = false
     if invisibleconn then invisibleconn:Disconnect() invisibleconn = nil end
-    if invisiblebind then pcall(function() RunService:UnbindFromRenderStep(invisiblebind) end) invisiblebind = nil end
-    if invisanimtrack then pcall(function() invisanimtrack:Stop() invisanimtrack:Destroy() end) invisanimtrack = nil end
+    if invisiblebind then
+        pcall(function() RunService:UnbindFromRenderStep(invisiblebind) end)
+        invisiblebind = nil
+    end
+    if invisanimtrack then
+        pcall(function() invisanimtrack:Stop() invisanimtrack:Destroy() end)
+        invisanimtrack = nil
+    end
     local ch = localp.Character
     local root = ch and ch:FindFirstChild("HumanoidRootPart")
     if root and invisoldcf then root.CFrame = invisoldcf end
@@ -215,17 +241,24 @@ local function kill(arg)
         notify("Monarch Hub", "Waiting for ForceField", 5)
         repeat task.wait(0.1) until not ch:FindFirstChild("ForceField")
     end
-    if player.Team and player.Team.Name == "Guards" and localp.Team and localp.Team.Name == "Guards" then change("Inmates") end
+    if player.Team and player.Team.Name == "Guards" and localp.Team and localp.Team.Name == "Guards" then
+        change("Inmates")
+    end
     local ch1 = getch()
     if localp.Team and localp.Team.Name == "Criminals" and ch1 and ch1:FindFirstChild("ForceField") then
         notify("Monarch Hub", "Waiting for ForceField", 5)
         repeat task.wait(0.1) until not ch1:FindFirstChild("ForceField")
     end
-    local hp = gethp() local hm = gethm() local og = hp.CFrame
+    local hp = gethp()
+    local hm = gethm()
+    local og = hp.CFrame
     invisible()
     local Event = storage.meleeEvent
     repeat
-        if hm.Health == 0 then cam.CameraSubject = gethm() break end
+        if hm.Health == 0 then
+            cam.CameraSubject = gethm()
+            break
+        end
         cam.CameraSubject = ch.Humanoid
         Event:FireServer(player, 1, 1)
         hp.CFrame = target.CFrame * CFrame.new(0, -2.5, 0)
@@ -241,13 +274,22 @@ end
 
 -- ========== ARREST ==========
 local function animh()
-    local hum = gethm() if not hum then return end
+    local hum = gethm()
+    if not hum then return end
     local animator = hum:FindFirstChildOfClass("Animator") or hum:WaitForChild("Animator", 2)
     if not animator then return end
-    local anim = Instance.new("Animation") anim.AnimationId = "rbxassetid://215384594"
-    local anim1 = Instance.new("Animation") anim1.AnimationId = "rbxassetid://279229192"
-    local track = animator:LoadAnimation(anim) track:Play() track.TimePosition = 2 track:AdjustSpeed(0)
-    local track1 = animator:LoadAnimation(anim1) track1:Play() track1.TimePosition = 2 track1:AdjustSpeed(0)
+    local anim = Instance.new("Animation")
+    anim.AnimationId = "rbxassetid://215384594"
+    local anim1 = Instance.new("Animation")
+    anim1.AnimationId = "rbxassetid://279229192"
+    local track = animator:LoadAnimation(anim)
+    track:Play()
+    track.TimePosition = 2
+    track:AdjustSpeed(0)
+    local track1 = animator:LoadAnimation(anim1)
+    track1:Play()
+    track1.TimePosition = 2
+    track1:AdjustSpeed(0)
 end
 
 local function arrest(arg)
@@ -257,23 +299,29 @@ local function arrest(arg)
     if not ch then notify("Monarch Hub", "Target Character Not Found", 5) return end
     local target = ch:FindFirstChild("HumanoidRootPart")
     if not target then notify("Monarch Hub", "Target Character Not Found", 5) return end
-    if not ch:GetAttribute("Hostile") then notify("Monarch Hub", "Cant arrest, not hostile", 5) return end
+    local sh = ch:GetAttribute("Hostile")
+    if not sh then notify("Monarch Hub", "Cant arrest, not hostile", 5) return end
     local ogt = localp.Team and localp.Team.Name or "Inmates"
     if localp.Team and localp.Team.Name ~= "Guards" then
         change("Guards")
         repeat task.wait(0.1) until localp:FindFirstChild("Backpack") and localp.Backpack:FindFirstChild("Handcuffs")
     end
     local event = storage.Remotes.ArrestPlayer
-    local hp = gethp() local ch1 = getch()
+    local hp = gethp()
+    local ch1 = getch()
     if not hp or not ch1 then notify("Monarch Hub", "Local character not found", 5) return end
     if ch:FindFirstChild("ForceField") then
         notify("Monarch Hub", "Waiting for ForceField", 5)
         repeat task.wait(0.1) until not ch:FindFirstChild("ForceField")
     end
     local og = hp.CFrame
-    for _, v in pairs(ch1:GetChildren()) do if v:IsA("Tool") then v.Parent = localp.Backpack end end
+    for _, v in pairs(ch1:GetChildren()) do
+        if v:IsA("Tool") then v.Parent = localp.Backpack end
+    end
     if not ch1:FindFirstChild("Handcuffs") then
-        if not localp.Backpack:FindFirstChild("Handcuffs") then notify("Monarch Hub", "Must be in Guards team!", 5) return end
+        if not localp.Backpack:FindFirstChild("Handcuffs") then
+            notify("Monarch Hub", "Must be in Guards team!", 5) return
+        end
         localp.Backpack.Handcuffs.Parent = ch1
     end
     animh()
@@ -283,7 +331,9 @@ local function arrest(arg)
         task.wait()
     end
     local humanoid = gethm()
-    if humanoid then for _, trac in pairs(humanoid:GetPlayingAnimationTracks()) do trac:Stop() end end
+    if humanoid then
+        for _, trac in pairs(humanoid:GetPlayingAnimationTracks()) do trac:Stop() end
+    end
     change(ogt)
     repeat task.wait() until getch() and getch():FindFirstChild("HumanoidRootPart")
     local newHp = gethp()
@@ -293,16 +343,21 @@ end
 -- ========== NOCLIP ==========
 local noclipbool = false
 local noclipConn = nil
+
 local function setNoclipParts(char, canCollide)
     if not char then return end
     for _, v in pairs(char:GetDescendants()) do
         if v:IsA("BasePart") then v.CanCollide = canCollide end
     end
 end
+
 local function noclip()
     pcall(function()
-        local sf = storage:FindFirstChild("Scripts")
-        if sf then local cc = sf:FindFirstChild("CharacterCollision") if cc then cc:Destroy() end end
+        local scriptsFolder = storage:FindFirstChild("Scripts")
+        if scriptsFolder then
+            local characterCollision = scriptsFolder:FindFirstChild("CharacterCollision")
+            if characterCollision then characterCollision:Destroy() end
+        end
     end)
     if noclipbool then return end
     noclipbool = true
@@ -310,16 +365,20 @@ local function noclip()
         while noclipbool do
             local ch = getch()
             if ch then
-                for _, v in pairs(ch:GetChildren()) do if v:IsA("BasePart") then v.CanCollide = false end end
+                for _, v in pairs(ch:GetChildren()) do
+                    if v:IsA("BasePart") then v.CanCollide = false end
+                end
             end
             task.wait()
         end
     end)
     if noclipConn then noclipConn:Disconnect() end
     noclipConn = localp.CharacterAdded:Connect(function(char)
-        task.wait(0.1) if noclipbool then setNoclipParts(char, false) end
+        task.wait(0.1)
+        if noclipbool then setNoclipParts(char, false) end
     end)
 end
+
 local function unnoclip()
     noclipbool = false
     if noclipConn then noclipConn:Disconnect() noclipConn = nil end
@@ -334,15 +393,349 @@ local function unnoclip()
     end
 end
 
--- ========== CRIM / AUTOG / LASER / AUTORE / KICK ==========
--- (Identical to the native-UI version; functions are self-contained.)
--- [Paste the crim(), autog()/unautog(), laser()/unlaser(),
---  autore()/unautore(), kick()/unkick() functions here exactly as
---  they appear in the native-UI script, since they don't depend on the UI.]
+-- ========== CRIMINAL ==========
+local function crim()
+    local hp = gethp()
+    if not hp then return end
+    local og = hp.CFrame
+    local ogcam = cam.CFrame
+    hp.CFrame = CFrame.new(-975, 108, 2071)
+    repeat task.wait() until localp.Team and localp.Team.Name == "Criminals"
+        and not (getch() and getch():FindFirstChild("ForceField"))
+    if hp and hp.Parent then hp.CFrame = og end
+    cam.CFrame = ogcam
+end
+
+-- ========== AUTO GUNS ==========
+local autogbool = false
+local function gethm_ag() local ch = localp.Character return ch and ch:FindFirstChildOfClass("Humanoid") end
+local function gethp_ag() local ch = localp.Character return ch and ch:FindFirstChild("HumanoidRootPart") end
+
+local function hasgun(name)
+    local ch = localp.Character
+    return (localp:FindFirstChild("Backpack") and localp.Backpack:FindFirstChild(name))
+        or (ch and ch:FindFirstChild(name))
+end
+
+local function helperAnim()
+    local hm = gethm_ag()
+    if not hm then return end
+    local anim = Instance.new("Animation")
+    anim.AnimationId = "rbxassetid://180426354"
+    anim.Name = "HelperAnim"
+    anim.Parent = hm
+    local track = hm:LoadAnimation(anim)
+    track:Play()
+end
+
+local function autog()
+    if autogbool then return end
+    autogbool = true
+    task.spawn(function()
+        while autogbool do
+            if not localp:FindFirstChildOfClass("Backpack") then task.wait(0.5) end
+            if localp.Team and localp.Team.Name == "Neutral" then
+                repeat task.wait(0.1) until localp.Team and localp.Team.Name ~= "Neutral"
+                task.wait(0.5)
+            end
+            local hm = gethm_ag()
+            local hp = gethp_ag()
+            if not hm or not hp then task.wait(0.5) continue end
+            local og = hp.CFrame
+            local ogcam = cam.CFrame
+            if not hasgun("AK-47") then
+                local Event = storage.Remotes.InteractWithItem
+                hp.CFrame = CFrame.new(-929, 97, 2056)
+                helperAnim()
+                task.wait(0.1)
+                hp.CFrame = CFrame.new(-932, 94, 2039)
+                hm:ChangeState(Enum.HumanoidStateType.Jumping)
+                while not hasgun("AK-47") and autogbool do
+                    local c = gethp_ag()
+                    if c then c.CFrame = CFrame.new(-932, 94, 2039) end
+                    pcall(function()
+                        Event:InvokeServer(Workspace.Prison_ITEMS.giver["AK-47"]["Meshes/AK47_7"])
+                    end)
+                    task.wait()
+                end
+                local h = gethm_ag()
+                if h then for _, t in pairs(h:GetPlayingAnimationTracks()) do t:Stop() end end
+            end
+            if not hasgun("Remington 870") then
+                local Event = storage.Remotes.InteractWithItem
+                local c = gethp_ag()
+                if c then c.CFrame = CFrame.new(-929, 97, 2056) end
+                helperAnim()
+                task.wait(0.1)
+                c = gethp_ag()
+                if c then c.CFrame = CFrame.new(-939, 94, 2040) end
+                local h = gethm_ag()
+                if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
+                while not hasgun("Remington 870") and autogbool do
+                    c = gethp_ag()
+                    if c then c.CFrame = CFrame.new(-939, 94, 2040) end
+                    pcall(function()
+                        Event:InvokeServer(Workspace.Prison_ITEMS.giver:GetChildren()[4]["Meshes/r870_2"])
+                    end)
+                    task.wait()
+                end
+                h = gethm_ag()
+                if h then for _, t in pairs(h:GetPlayingAnimationTracks()) do t:Stop() end end
+            end
+            local f = gethp_ag()
+            if f then f.CFrame = og end
+            cam.CFrame = ogcam
+            task.wait(0.5)
+        end
+    end)
+end
+
+local function unautog() autogbool = false end
+
+-- ========== LASER ==========
+local laserbool = false
+local laserOriginals = {}
+local laserValues = { AutoFire = true, FireRate = 0.035, SpreadRadius = 0 }
+local laserBackpackConn = nil
+local laserCharConn = nil
+local laserRespawnConn = nil
+
+local function laserRestoreAll()
+    for tool, originals in pairs(laserOriginals) do
+        if typeof(tool) == "Instance" and tool.Parent then
+            pcall(function()
+                for attr, value in pairs(originals) do tool:SetAttribute(attr, value) end
+            end)
+        end
+    end
+    table.clear(laserOriginals)
+end
+
+local function applyLaserToTool(tool)
+    if not laserbool or not tool or not tool:IsA("Tool") then return end
+    if tool:GetAttribute("ToolType") ~= "Gun" and tool:GetAttribute("FireRate") == nil then return end
+    if not laserOriginals[tool] then
+        local orig = {}
+        for attr in pairs(laserValues) do orig[attr] = tool:GetAttribute(attr) end
+        laserOriginals[tool] = orig
+    end
+    for attr, value in pairs(laserValues) do
+        if tool:GetAttribute(attr) ~= value then tool:SetAttribute(attr, value) end
+    end
+end
+
+local function applyLaserToAll()
+    if not laserbool then return end
+    local bp = localp:FindFirstChildOfClass("Backpack")
+    if bp then for _, c in ipairs(bp:GetChildren()) do applyLaserToTool(c) end end
+    local char = localp.Character
+    if char then for _, c in ipairs(char:GetChildren()) do applyLaserToTool(c) end end
+end
+
+local function bindLaserHooks()
+    if laserBackpackConn then laserBackpackConn:Disconnect() laserBackpackConn = nil end
+    if laserCharConn then laserCharConn:Disconnect() laserCharConn = nil end
+    local bp = localp:FindFirstChildOfClass("Backpack")
+    if bp then laserBackpackConn = bp.ChildAdded:Connect(applyLaserToTool) end
+    local char = localp.Character
+    if char then laserCharConn = char.ChildAdded:Connect(applyLaserToTool) end
+end
+
+local function laser(state)
+    if state == nil then laserbool = not laserbool else laserbool = state and true or false end
+    if laserbool then
+        bindLaserHooks()
+        applyLaserToAll()
+        if not laserRespawnConn then
+            laserRespawnConn = localp.CharacterAdded:Connect(function()
+                if not laserbool then return end
+                task.wait(0.35)
+                table.clear(laserOriginals)
+                bindLaserHooks()
+                applyLaserToAll()
+            end)
+        end
+        notify("Monarch Hub", "Laser Enabled", 3)
+    else
+        laserRestoreAll()
+        if laserBackpackConn then laserBackpackConn:Disconnect() laserBackpackConn = nil end
+        if laserCharConn then laserCharConn:Disconnect() laserCharConn = nil end
+        if laserRespawnConn then laserRespawnConn:Disconnect() laserRespawnConn = nil end
+        notify("Monarch Hub", "Laser Disabled", 3)
+    end
+end
+
+local function unlaser() laser(false) end
+
+-- ========== AUTO RESPAWN ==========
+local autorebool = false
+
+local function autore()
+    if autorebool then return end
+    autorebool = true
+    task.spawn(function()
+        while autorebool do
+            local hm = gethm()
+            if hm and hm.Health == 0 then
+                local hp = gethp()
+                if not hp then task.wait() continue end
+                local og = hp.CFrame
+                local ogcam = cam.CFrame
+                local ogt = localp.Team and localp.Team.Name or "Inmates"
+                change(ogt)
+                repeat task.wait() until getch() and getch():FindFirstChild("HumanoidRootPart")
+                if getch() and getch():FindFirstChild("ForceField") and ogt == "Criminals" then
+                    repeat task.wait() until not getch():FindFirstChild("ForceField")
+                end
+                task.wait()
+                local n = gethp()
+                if n then n.CFrame = og end
+                cam.CFrame = ogcam
+            end
+            task.wait()
+        end
+    end)
+end
+
+local function unautore() autorebool = false end
+
+-- ========== CAR KICK ==========
+local kickRunning = false
+local kickEnabled = false
+local kickOriginalCF = nil
+local kickRespawnConn = nil
+local KICK_ANIM_ID = "rbxassetid://148840371"
+local KICK_ANIM_TIME = 0.19
+
+local function gethp_kick() local ch = localp.Character return ch and ch:FindFirstChild("HumanoidRootPart") end
+
+local function getTargetCar(plr)
+    local char = plr and plr.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local seat = hum and hum.SeatPart
+    if not seat or not seat:IsA("VehicleSeat") then return nil, nil end
+    local model = seat:FindFirstAncestorOfClass("Model")
+    while model and model.Parent and model.Parent:IsA("Model") and model.Parent ~= workspace do
+        model = model.Parent
+    end
+    return model, seat
+end
+
+local function findPassengerSeat(model, driverSeat)
+    local fallback = nil
+    for _, item in ipairs(model:GetDescendants()) do
+        if item ~= driverSeat
+            and (item:IsA("Seat") or item:IsA("VehicleSeat"))
+            and not item.Occupant
+            and not item.Disabled then
+            if item:IsA("Seat") and not item:IsA("VehicleSeat") then return item end
+            fallback = fallback or item
+        end
+    end
+    return fallback
+end
+
+local function returnToKickStart(character)
+    if not kickOriginalCF then return end
+    local root = character:WaitForChild("HumanoidRootPart", 8)
+    local hum = character:WaitForChild("Humanoid", 8)
+    if not root or not hum then return end
+    local t0 = os.clock()
+    while kickEnabled and os.clock() - t0 < 1.6 and hum.Health > 0 do
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
+        root.CFrame = kickOriginalCF
+        task.wait()
+    end
+end
+
+local function doCarKickOnce(target)
+    local myChar = localp.Character
+    local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not (myChar and myHum and myRoot) or myHum.Health <= 0 then return false end
+    local car, driverSeat = getTargetCar(target)
+    if not car then return false end
+    local passengerSeat = findPassengerSeat(car, driverSeat)
+    if not passengerSeat then return false end
+    local t0 = os.clock()
+    while kickEnabled
+        and localp.Character == myChar
+        and myHum.Health > 0
+        and myHum.SeatPart ~= passengerSeat
+        and os.clock() - t0 < 3.2 do
+        pcall(function()
+            myRoot.CFrame = passengerSeat.CFrame * CFrame.new(0, 2, 0)
+            passengerSeat:Sit(myHum)
+        end)
+        task.wait()
+    end
+    if not kickEnabled or myHum.SeatPart ~= passengerSeat then return false end
+    local track
+    pcall(function()
+        local anim = Instance.new("Animation")
+        anim.AnimationId = KICK_ANIM_ID
+        track = myHum:LoadAnimation(anim)
+        track.Looped = true
+        track:Play()
+    end)
+    task.wait(KICK_ANIM_TIME)
+    pcall(function()
+        if track then track:Stop() end
+        myHum.Health = 0
+        myChar:BreakJoints()
+    end)
+    return true
+end
+
+local function kick(arg)
+    local player, err = findpl(arg)
+    if not player then notify("Monarch Hub", err or "Player not found", 5) return end
+    if player == localp then notify("Monarch Hub", "Can't kick yourself", 4) return end
+    kickEnabled = false
+    task.wait(0.15)
+    local myRoot = gethp_kick()
+    if myRoot then kickOriginalCF = myRoot.CFrame end
+    kickEnabled = true
+    notify("Monarch Hub", "Car-kicking " .. (player.DisplayName or player.Name), 4)
+    if kickRespawnConn then kickRespawnConn:Disconnect() kickRespawnConn = nil end
+    kickRespawnConn = localp.CharacterAdded:Connect(function(newChar)
+        if kickEnabled then returnToKickStart(newChar) end
+    end)
+    task.spawn(function()
+        while kickEnabled and player.Parent == Players do
+            local myChar = localp.Character
+            local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+            if myHum and myHum.Health > 0 and not kickRunning then
+                kickRunning = true
+                local ok, result = pcall(doCarKickOnce, player)
+                kickRunning = false
+                if ok and result then
+                    local oldChar = myChar
+                    repeat task.wait(0.06) until not kickEnabled or localp.Character ~= oldChar
+                end
+            end
+            task.wait(0.12)
+        end
+        kickEnabled = false
+        kickRunning = false
+        if kickRespawnConn then kickRespawnConn:Disconnect() kickRespawnConn = nil end
+    end)
+end
+
+local function unkick()
+    kickEnabled = false
+    kickRunning = false
+    if kickRespawnConn then kickRespawnConn:Disconnect() kickRespawnConn = nil end
+    notify("Monarch Hub", "Kick Stopped", 3)
+end
 
 -- ========== SILENT AIM ==========
 local silentAimEnabled = false
-local aimPart = "Head" local wallCheck = true local fov = 360 local teamCheck = true
+local aimPart = "Head"
+local wallCheck = true
+local fov = 360
+local teamCheck = true
 
 local function canDamage(plr)
     local char = plr.Character
@@ -358,24 +751,33 @@ local function isVisible(char, origin)
     local params = RaycastParams.new()
     params.FilterType = Enum.RaycastFilterType.Exclude
     params.FilterDescendantsInstances = localp.Character and { localp.Character } or {}
-    for _, part in ipairs({ char:FindFirstChild(aimPart), char:FindFirstChild("Head"), char:FindFirstChild("HumanoidRootPart") }) do
+    for _, part in ipairs({
+        char:FindFirstChild(aimPart),
+        char:FindFirstChild("Head"),
+        char:FindFirstChild("HumanoidRootPart")
+    }) do
         if not part then continue end
         local dir = part.Position - origin
         if dir.Magnitude <= 0 then continue end
         local result = Workspace:Raycast(origin, dir, params)
-        if not result or result.Instance:FindFirstAncestorOfClass("Model") == char then return part end
+        if not result or result.Instance:FindFirstAncestorOfClass("Model") == char then
+            return part
+        end
     end
     return nil
 end
 
 local function getTarget(origin)
-    local cam = Workspace.CurrentCamera if not cam then return nil end
+    local cam = Workspace.CurrentCamera
+    if not cam then return nil end
     local vps = cam.ViewportSize
     local center = Vector2.new(vps.X / 2, vps.Y / 2)
-    local bestDist = fov local bestPart = nil
+    local bestDist = fov
+    local bestPart = nil
     for _, plr in pairs(Players:GetPlayers()) do
         if plr == localp or not canDamage(plr) then continue end
-        local char = plr.Character if not char then continue end
+        local char = plr.Character
+        if not char then continue end
         local part = char:FindFirstChild(aimPart) or char:FindFirstChild("Head")
         if not part then continue end
         local pos, onScreen = cam:WorldToViewportPoint(part.Position)
@@ -388,7 +790,8 @@ local function getTarget(origin)
             if not visPart then continue end
             part = visPart
         end
-        bestPart = part bestDist = sDist
+        bestPart = part
+        bestDist = sDist
     end
     return bestPart
 end
@@ -463,47 +866,517 @@ local function silent()
     if silentAimEnabled then ensureHook() notify("Monarch Hub", "Silent Aim Enabled", 3)
     else notify("Monarch Hub", "Silent Aim Disabled", 3) end
 end
+
 local function unsilent()
     if silentAimEnabled then silentAimEnabled = false notify("Monarch Hub", "Silent Aim Disabled", 3) end
 end
 
--- ========== BUILD UI ==========
-local Window = Library:CreateWindow({ Title = "Monarch Hub" })
-local Tabs = {
-    Combat = Window:AddTab("Combat"),
-    Movement = Window:AddTab("Movement"),
-    Team = Window:AddTab("Team & Auto"),
-    Misc = Window:AddTab("Misc"),
-    Settings = Window:AddTab("Settings"),
-}
+-- ========== NATIVE UI ==========
+local menuOpen = false
+local dragData = nil
 
--- Combat Tab
-local CombatSection = Tabs.Combat:AddSection("Combat")
-CombatSection:AddToggle({ text = "Silent Aim", flag = "silentAim", callback = function(state) if state then silent() else unsilent() end end })
-CombatSection:AddToggle({ text = "Laser (Auto/No Spread)", flag = "laser", callback = function(state) laser(state) end })
-CombatSection:AddInput({ text = "Target Name", flag = "targetName" })
-CombatSection:AddButton({ text = "Kill Player", callback = function() local n = Library.flags.targetName if n and n ~= "" then kill(n) else notify("Monarch Hub", "Enter a target name first", 3) end end })
-CombatSection:AddButton({ text = "Arrest Player", callback = function() local n = Library.flags.targetName if n and n ~= "" then arrest(n) else notify("Monarch Hub", "Enter a target name first", 3) end end })
+local function getGuiParent()
+    local ok, r = pcall(function() return gethui() end)
+    if ok and r then return r end
+    ok, r = pcall(function() return CoreGui end)
+    if ok and r then return r end
+    return localp:WaitForChild("PlayerGui")
+end
 
--- Movement Tab
-local MoveSection = Tabs.Movement:AddSection("Movement")
-MoveSection:AddToggle({ text = "Noclip", flag = "noclip", callback = function(state) if state then noclip() else unnoclip() end end })
+local guiParent = getGuiParent()
 
--- Team Tab
-local TeamSection = Tabs.Team:AddSection("Team")
-TeamSection:AddButton({ text = "Become Criminal", callback = function() crim() end })
-TeamSection:AddInput({ text = "Team (Inmates/Guards/Criminals)", flag = "teamName" })
-TeamSection:AddButton({ text = "Change Team", callback = function() local t = Library.flags.teamName if t and t ~= "" then change(t) end end })
-local AutoSection = Tabs.Team:AddSection("Automation")
-AutoSection:AddToggle({ text = "Auto Guns (AK + Remington)", flag = "autog", callback = function(state) if state then autog() else unautog() end end })
-AutoSection:AddToggle({ text = "Auto Respawn", flag = "autore", callback = function(state) if state then autore() else unautore() end end })
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "MonarchHub"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.IgnoreGuiInset = true
+screenGui.Parent = guiParent
 
--- Misc Tab
-local MiscSection = Tabs.Misc:AddSection("Car Kick")
-MiscSection:AddInput({ text = "Target Name", flag = "kickTarget" })
-MiscSection:AddButton({ text = "Car Kick Player", callback = function() local n = Library.flags.kickTarget if n and n ~= "" then kick(n) end end })
-MiscSection:AddButton({ text = "Stop Car Kick", callback = function() unkick() end })
+-- Toggle button
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 50, 0, 50)
+toggleBtn.Position = UDim2.new(0, 10, 0.5, -25)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+toggleBtn.BackgroundTransparency = 0.15
+toggleBtn.BorderSizePixel = 0
+toggleBtn.Text = "☰"
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.TextSize = 24
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.Parent = screenGui
+Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 12)
 
--- Settings Tab
-local SettingsSection = Tabs.Settings:AddSection("Menu")
-SettingsSection:AddButton({ text = "Unload", callback = function() Library:Unload() end })
+-- Main frame
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 290, 0, 410)
+mainFrame.Position = UDim2.new(0.5, -145, 0.5, -205)
+mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui
+mainFrame.Visible = false
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 8)
+local stroke = Instance.new("UIStroke", mainFrame)
+stroke.Color = Color3.fromRGB(60, 60, 60)
+stroke.Thickness = 1
+
+-- Title bar
+local titleBar = Instance.new("TextButton")
+titleBar.Size = UDim2.new(1, 0, 0, 36)
+titleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+titleBar.BorderSizePixel = 0
+titleBar.Text = "  Monarch Hub"
+titleBar.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleBar.TextSize = 14
+titleBar.Font = Enum.Font.GothamBold
+titleBar.TextXAlignment = Enum.TextXAlignment.Left
+titleBar.Parent = mainFrame
+titleBar.AutoButtonColor = false
+Instance.new("UICorner", titleBar).CornerRadius = UDim.new(0, 8)
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 30, 0, 28)
+closeBtn.Position = UDim2.new(1, -34, 0, 4)
+closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+closeBtn.BorderSizePixel = 0
+closeBtn.Text = "X"
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.TextSize = 14
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.Parent = titleBar
+Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 6)
+closeBtn.MouseButton1Click:Connect(function()
+    menuOpen = false
+    mainFrame.Visible = false
+end)
+
+-- Tab bar
+local tabBar = Instance.new("Frame")
+tabBar.Size = UDim2.new(1, -10, 0, 30)
+tabBar.Position = UDim2.new(0, 5, 0, 42)
+tabBar.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+tabBar.BorderSizePixel = 0
+tabBar.Parent = mainFrame
+Instance.new("UICorner", tabBar).CornerRadius = UDim.new(0, 6)
+local tabLayout = Instance.new("UIListLayout", tabBar)
+tabLayout.FillDirection = Enum.FillDirection.Horizontal
+tabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+tabLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
+tabLayout.Padding = UDim.new(0, 2)
+
+-- Content
+local contentFrame = Instance.new("ScrollingFrame")
+contentFrame.Size = UDim2.new(1, -10, 1, -82)
+contentFrame.Position = UDim2.new(0, 5, 0, 77)
+contentFrame.BackgroundTransparency = 1
+contentFrame.BorderSizePixel = 0
+contentFrame.ScrollBarThickness = 3
+contentFrame.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 80)
+contentFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+contentFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+contentFrame.Parent = mainFrame
+local contentLayout = Instance.new("UIListLayout", contentFrame)
+contentLayout.SortOrder = Enum.SortOrder.LayoutOrder
+contentLayout.Padding = UDim.new(0, 4)
+contentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+local contentPad = Instance.new("UIPadding", contentFrame)
+contentPad.PaddingTop = UDim.new(0, 4)
+contentPad.PaddingBottom = UDim.new(0, 4)
+
+-- Drag (touch + mouse)
+local function setupDrag(frame)
+    local dragging = false
+    local startPos, startFramePos
+    local function begin(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            startPos = input.Position
+            startFramePos = frame.Position
+        end
+    end
+    local function endDrag(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end
+    local function update(input)
+        if not dragging then return end
+        if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then return end
+        local delta = input.Position - startPos
+        frame.Position = UDim2.new(
+            startFramePos.X.Scale, startFramePos.X.Offset + delta.X,
+            startFramePos.Y.Scale, startFramePos.Y.Offset + delta.Y
+        )
+    end
+    frame.InputBegan:Connect(begin)
+    frame.InputEnded:Connect(endDrag)
+    UserInputService.InputChanged:Connect(update)
+end
+setupDrag(titleBar)
+
+-- UI builders
+local function createButton(text, callback, parent)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -8, 0, 34)
+    btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    btn.BorderSizePixel = 0
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(220, 220, 220)
+    btn.TextSize = 13
+    btn.Font = Enum.Font.Gotham
+    btn.Parent = parent
+    btn.AutoButtonColor = false
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+    local s = Instance.new("UIStroke", btn)
+    s.Color = Color3.fromRGB(60, 60, 60)
+    s.Thickness = 1
+    btn.MouseButton1Click:Connect(function()
+        local ok, err = pcall(callback)
+        if not ok then warn("[Monarch Hub]", err) end
+    end)
+    btn.MouseButton1Down:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(60, 60, 60)}):Play()
+    end)
+    btn.MouseButton1Up:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(40, 40, 40)}):Play()
+    end)
+    return btn
+end
+
+local function createToggle(text, default, callback, parent)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, -8, 0, 34)
+    frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    frame.BorderSizePixel = 0
+    frame.Parent = parent
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
+    local s = Instance.new("UIStroke", frame)
+    s.Color = Color3.fromRGB(60, 60, 60)
+    s.Thickness = 1
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -54, 1, 0)
+    label.Position = UDim2.new(0, 10, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = Color3.fromRGB(220, 220, 220)
+    label.TextSize = 13
+    label.Font = Enum.Font.Gotham
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = frame
+    local tBtn = Instance.new("TextButton")
+    tBtn.Size = UDim2.new(0, 38, 0, 22)
+    tBtn.Position = UDim2.new(1, -46, 0.5, -11)
+    tBtn.BackgroundColor3 = default and Color3.fromRGB(50, 200, 100) or Color3.fromRGB(70, 70, 70)
+    tBtn.BorderSizePixel = 0
+    tBtn.Text = ""
+    tBtn.Parent = frame
+    tBtn.AutoButtonColor = false
+    Instance.new("UICorner", tBtn).CornerRadius = UDim.new(1, 0)
+    local knob = Instance.new("Frame")
+    knob.Size = UDim2.new(0, 18, 0, 18)
+    knob.Position = default and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 2, 0.5, -9)
+    knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    knob.BorderSizePixel = 0
+    knob.Parent = tBtn
+    Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+    local state = default
+    local function setState(n, fire)
+        state = n
+        TweenService:Create(tBtn, TweenInfo.new(0.15), {
+            BackgroundColor3 = state and Color3.fromRGB(50, 200, 100) or Color3.fromRGB(70, 70, 70)
+        }):Play()
+        TweenService:Create(knob, TweenInfo.new(0.15), {
+            Position = state and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 2, 0.5, -9)
+        }):Play()
+        if fire then
+            local ok, err = pcall(callback, state)
+            if not ok then warn("[Monarch Hub]", err) end
+        end
+    end
+    tBtn.MouseButton1Click:Connect(function() setState(not state, true) end)
+    return {setState = setState, getState = function() return state end}
+end
+
+-- Text input popup
+local promptGui = Instance.new("ScreenGui")
+promptGui.Name = "MonarchPrompt"
+promptGui.ResetOnSpawn = false
+promptGui.Parent = guiParent
+local overlay = Instance.new("TextButton")
+overlay.Size = UDim2.new(1, 0, 1, 0)
+overlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+overlay.BackgroundTransparency = 0.5
+overlay.BorderSizePixel = 0
+overlay.Text = ""
+overlay.Parent = promptGui
+overlay.Visible = false
+
+local promptFrame = Instance.new("Frame")
+promptFrame.Size = UDim2.new(0, 260, 0, 160)
+promptFrame.Position = UDim2.new(0.5, -130, 0.5, -80)
+promptFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+promptFrame.BorderSizePixel = 0
+promptFrame.Parent = promptGui
+promptFrame.Visible = false
+Instance.new("UICorner", promptFrame).CornerRadius = UDim.new(0, 8)
+
+local pTitle = Instance.new("TextLabel")
+pTitle.Size = UDim2.new(1, -20, 0, 28)
+pTitle.Position = UDim2.new(0, 10, 0, 10)
+pTitle.BackgroundTransparency = 1
+pTitle.Text = "Enter name:"
+pTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+pTitle.TextSize = 14
+pTitle.Font = Enum.Font.GothamBold
+pTitle.TextXAlignment = Enum.TextXAlignment.Left
+pTitle.Parent = promptFrame
+
+local pInput = Instance.new("TextBox")
+pInput.Size = UDim2.new(1, -20, 0, 34)
+pInput.Position = UDim2.new(0, 10, 0, 45)
+pInput.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+pInput.BorderSizePixel = 0
+pInput.Text = ""
+pInput.PlaceholderText = "Player name..."
+pInput.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
+pInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+pInput.TextSize = 13
+pInput.Font = Enum.Font.Gotham
+pInput.Parent = promptFrame
+Instance.new("UICorner", pInput).CornerRadius = UDim.new(0, 6)
+
+local pConfirm = Instance.new("TextButton")
+pConfirm.Size = UDim2.new(0, 110, 0, 30)
+pConfirm.Position = UDim2.new(0.5, 5, 1, -42)
+pConfirm.BackgroundColor3 = Color3.fromRGB(50, 200, 100)
+pConfirm.BorderSizePixel = 0
+pConfirm.Text = "Confirm"
+pConfirm.TextColor3 = Color3.fromRGB(255, 255, 255)
+pConfirm.TextSize = 13
+pConfirm.Font = Enum.Font.GothamBold
+pConfirm.Parent = promptFrame
+Instance.new("UICorner", pConfirm).CornerRadius = UDim.new(0, 6)
+
+local pCancel = Instance.new("TextButton")
+pCancel.Size = UDim2.new(0, 110, 0, 30)
+pCancel.Position = UDim2.new(0.5, -115, 1, -42)
+pCancel.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+pCancel.BorderSizePixel = 0
+pCancel.Text = "Cancel"
+pCancel.TextColor3 = Color3.fromRGB(255, 255, 255)
+pCancel.TextSize = 13
+pCancel.Font = Enum.Font.GothamBold
+pCancel.Parent = promptFrame
+Instance.new("UICorner", pCancel).CornerRadius = UDim.new(0, 6)
+
+local promptCb = nil
+local function showPrompt(title, ph, cb)
+    pTitle.Text = title or "Enter:"
+    pInput.Text = ""
+    pInput.PlaceholderText = ph or "Enter..."
+    promptCb = cb
+    overlay.Visible = true
+    promptFrame.Visible = true
+    if isMobile then
+        pInput:CaptureFocus()
+    end
+end
+local function hidePrompt()
+    overlay.Visible = false
+    promptFrame.Visible = false
+    promptCb = nil
+    pInput:ReleaseFocus()
+end
+pConfirm.MouseButton1Click:Connect(function()
+    local txt = pInput.Text
+    local cb = promptCb
+    hidePrompt()
+    if cb and txt and txt ~= "" then
+        local ok, err = pcall(cb, txt)
+        if not ok then warn("[Monarch Hub]", err) end
+    end
+end)
+pCancel.MouseButton1Click:Connect(hidePrompt)
+overlay.MouseButton1Click:Connect(hidePrompt)
+
+-- Tab system
+local tabs = {}
+local function createTab(name)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.25, -2, 1, 0)
+    btn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    btn.BackgroundTransparency = 1
+    btn.BorderSizePixel = 0
+    btn.Text = name
+    btn.TextColor3 = Color3.fromRGB(150, 150, 150)
+    btn.TextSize = 11
+    btn.Font = Enum.Font.GothamBold
+    btn.Parent = tabBar
+    btn.AutoButtonColor = false
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+    local page = Instance.new("Frame")
+    page.Size = UDim2.new(1, 0, 1, 0)
+    page.BackgroundTransparency = 1
+    page.BorderSizePixel = 0
+    page.Parent = contentFrame
+    page.Visible = false
+    local pL = Instance.new("UIListLayout", page)
+    pL.SortOrder = Enum.SortOrder.LayoutOrder
+    pL.Padding = UDim.new(0, 4)
+    local tab = {button = btn, page = page, name = name}
+    table.insert(tabs, tab)
+    btn.MouseButton1Click:Connect(function()
+        for _, t in ipairs(tabs) do
+            t.button.TextColor3 = Color3.fromRGB(150, 150, 150)
+            t.button.BackgroundTransparency = 1
+            t.page.Visible = false
+        end
+        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        btn.BackgroundTransparency = 0
+        btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        page.Visible = true
+    end)
+    return tab
+end
+
+local CombatTab = createTab("Combat")
+local MovementTab = createTab("Move")
+local TeamTab = createTab("Team")
+local MiscTab = createTab("Misc")
+CombatTab.button:Fire("MouseButton1Click")
+
+-- Section labels
+local function addLabel(parent, text)
+    local l = Instance.new("TextLabel")
+    l.Size = UDim2.new(1, 0, 0, 20)
+    l.BackgroundTransparency = 1
+    l.Text = "  " .. text
+    l.TextColor3 = Color3.fromRGB(120, 120, 120)
+    l.TextSize = 10
+    l.Font = Enum.Font.GothamBold
+    l.TextXAlignment = Enum.TextXAlignment.Left
+    l.Parent = parent
+    return l
+end
+
+-- Combat
+local CG = Instance.new("Frame")
+CG.Size = UDim2.new(1, -8, 0, 0)
+CG.BackgroundTransparency = 1
+CG.Parent = CombatTab.page
+CG.AutomaticSize = Enum.AutomaticSize.Y
+local cgl = Instance.new("UIListLayout", CG)
+cgl.SortOrder = Enum.SortOrder.LayoutOrder
+cgl.Padding = UDim.new(0, 4)
+
+addLabel(CG, "SILENT AIM")
+createToggle("Silent Aim", false, function(s) if s then silent() else unsilent() end end, CG)
+createToggle("Laser (Auto/No Spread)", false, function(s) laser(s) end, CG)
+addLabel(CG, "PLAYER ACTIONS")
+createButton("Kill Player", function()
+    showPrompt("Kill Player - Enter Name:", "Player name...", function(n) kill(n) end)
+end, CG)
+createButton("Arrest Player", function()
+    showPrompt("Arrest Player - Enter Name:", "Player name...", function(n) arrest(n) end)
+end, CG)
+
+-- Movement
+local MG = Instance.new("Frame")
+MG.Size = UDim2.new(1, -8, 0, 0)
+MG.BackgroundTransparency = 1
+MG.Parent = MovementTab.page
+MG.AutomaticSize = Enum.AutomaticSize.Y
+local mgl = Instance.new("UIListLayout", MG)
+mgl.SortOrder = Enum.SortOrder.LayoutOrder
+mgl.Padding = UDim.new(0, 4)
+addLabel(MG, "MOVEMENT")
+createToggle("Noclip", false, function(s) if s then noclip() else unnoclip() end end, MG)
+
+-- Team
+local TG = Instance.new("Frame")
+TG.Size = UDim2.new(1, -8, 0, 0)
+TG.BackgroundTransparency = 1
+TG.Parent = TeamTab.page
+TG.AutomaticSize = Enum.AutomaticSize.Y
+local tgl = Instance.new("UIListLayout", TG)
+tgl.SortOrder = Enum.SortOrder.LayoutOrder
+tgl.Padding = UDim.new(0, 4)
+addLabel(TG, "TEAM")
+createButton("Become Criminal", function() crim() end, TG)
+createButton("Change Team", function()
+    showPrompt("Change Team:", "Inmates / Guards / Criminals", function(t) change(t) end)
+end, TG)
+addLabel(TG, "AUTOMATION")
+createToggle("Auto Guns (AK + Remington)", false, function(s) if s then autog() else unautog() end end, TG)
+createToggle("Auto Respawn", false, function(s) if s then autore() else unautore() end end, TG)
+
+-- Misc
+local XG = Instance.new("Frame")
+XG.Size = UDim2.new(1, -8, 0, 0)
+XG.BackgroundTransparency = 1
+XG.Parent = MiscTab.page
+XG.AutomaticSize = Enum.AutomaticSize.Y
+local xgl = Instance.new("UIListLayout", XG)
+xgl.SortOrder = Enum.SortOrder.LayoutOrder
+xgl.Padding = UDim.new(0, 4)
+addLabel(XG, "CAR KICK")
+createButton("Car Kick Player", function()
+    showPrompt("Car Kick - Enter Name:", "Player name...", function(n) kick(n) end)
+end, XG)
+createButton("Stop Car Kick", function() unkick() end, XG)
+addLabel(XG, "UNLOAD")
+createButton("Unload Script", function()
+    screenGui:Destroy()
+    promptGui:Destroy()
+    getgenv().kill = nil
+    getgenv().arrest = nil
+    getgenv().noclip = nil
+    getgenv().crim = nil
+    getgenv().autog = nil
+    getgenv().laser = nil
+    getgenv().autore = nil
+    getgenv().kick = nil
+    getgenv().silent = nil
+    print("[Monarch Hub] Unloaded.")
+end, XG)
+
+-- Toggle menu
+local function toggleMenu()
+    menuOpen = not menuOpen
+    mainFrame.Visible = menuOpen
+end
+toggleBtn.MouseButton1Click:Connect(toggleMenu)
+toggleBtn.Activated:Connect(function() toggleMenu() end)
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if input.KeyCode == Enum.KeyCode.RightShift then toggleMenu() end
+end)
+
+if isMobile then
+    toggleBtn.Visible = true
+    mainFrame.Visible = false
+else
+    toggleBtn.Visible = true
+    mainFrame.Visible = true
+    menuOpen = true
+end
+
+-- Expose globals
+getgenv().kill = kill
+getgenv().arrest = arrest
+getgenv().noclip = noclip
+getgenv().unnoclip = unnoclip
+getgenv().crim = crim
+getgenv().autog = autog
+getgenv().unautog = unautog
+getgenv().laser = laser
+getgenv().unlaser = unlaser
+getgenv().autore = autore
+getgenv().unautore = unautore
+getgenv().kick = kick
+getgenv().unkick = unkick
+getgenv().silent = silent
+getgenv().unsilent = unsilent
+getgenv().change = change
+
+print("[Monarch Hub] Native UI loaded. Mobile: tap ☰ | PC: RightShift")
