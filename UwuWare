@@ -1,103 +1,509 @@
--- Detect device and load the corresponding Obsidian source
-local repo
-if game:GetService("UserInputService").TouchEnabled then
-    repo = 'https://raw.githubusercontent.com/deividcomsono/Obsidian/main/'
-    print("[Monarch Hub] Mobile mode loaded")
-else
-    repo = 'https://raw.githubusercontent.com/deividcomsono/Obsidian/main/'
-    print("[Monarch Hub] PC mode loaded")
+--[[
+    Monarch Hub - uwuware 2.x with touch patch
+    Loads uwuware, patches mobile input, wires in all 9 Prison Life features.
+]]
+
+-- ========== LOAD UWUWARE ==========
+local Library
+do
+    local src = game:HttpGet('https://raw.githubusercontent.com/Stefanuk12/UI-Libraries/master/scripts/uwuware-2.x.lua')
+    -- Patch: make every MouseButton1 / MouseMovement check also accept Touch
+    src = src:gsub('UserInputType%.MouseButton1', '(UserInputType.MouseButton1 or UserInputType.Touch)')
+    src = src:gsub('UserInputType%.MouseMovement', '(UserInputType.MouseMovement or UserInputType.Touch)')
+    src = src:gsub('input%.UserInputType%.Name == "MouseButton1"', '((input.UserInputType.Name == "MouseButton1") or (input.UserInputType.Name == "Touch"))')
+    src = src:gsub('input%.UserInputType%.Name == "MouseMovement"', '((input.UserInputType.Name == "MouseMovement") or (input.UserInputType.Name == "Touch"))')
+    src = src:gsub('Input%.UserInputType%.Name == "MouseButton1"', '((Input.UserInputType.Name == "MouseButton1") or (Input.UserInputType.Name == "Touch"))')
+    src = src:gsub('Input%.UserInputType%.Name == "MouseMovement"', '((Input.UserInputType.Name == "MouseMovement") or (Input.UserInputType.Name == "Touch"))')
+    Library = loadstring(src)()
 end
 
-local Library = loadstring(game:HttpGet(repo .. 'Library.lua'))()
-local ThemeManager = loadstring(game:HttpGet(repo .. 'addons/ThemeManager.lua'))()
-local SaveManager = loadstring(game:HttpGet(repo .. 'addons/SaveManager.lua'))()
+-- ========== SERVICES ==========
+local Players = game:GetService("Players")
+local Teams = game:GetService("Teams")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local StarterGui = game:GetService("StarterGui")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
 
--- Create window
-local Window = Library:CreateWindow({
-    Title = 'Monarch Hub',
-    Center = true,
-    AutoShow = true,
-    TabPadding = 8,
-    MenuFadeTime = 0.2,
-})
+local localp = Players.LocalPlayer
+local storage = ReplicatedStorage
+local cam = Workspace.CurrentCamera
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
-local Tabs = {
-    Combat = Window:AddTab('Combat', 'crosshair'),
-    Movement = Window:AddTab('Movement', 'run'),
-    Team = Window:AddTab('Team & Auto', 'users'),
-    Misc = Window:AddTab('Misc', 'wrench'),
-    ['UI Settings'] = Window:AddTab('UI Settings', 'settings'),
+-- ========== TEAM REFS ==========
+local team = {
+    Neutral = Teams:FindFirstChild("Neutral") or Teams:FindFirstChild("Civilian"),
+    Inmates = Teams:FindFirstChild("Inmates"),
+    Guards = Teams:FindFirstChild("Guards"),
+    Criminals = Teams:FindFirstChild("Criminals")
 }
 
--- ========== PASTE YOUR FUNCTION DEFINITIONS HERE ==========
--- Copy kill, arrest, noclip, crim, autog, laser, autore, kick, silent, etc.
--- ==========================================================
+-- ========== HELPERS ==========
+local function notify(title, text, duration)
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title = title or "Monarch Hub",
+            Text = text or "",
+            Duration = duration or 3
+        })
+    end)
+end
 
--- Combat Tab example
-local CombatGroup = Tabs.Combat:AddLeftGroupbox('Combat')
+local function getch()
+    if localp.Character then return localp.Character end
+    repeat task.wait(0.1) until localp.Character
+    return localp.Character
+end
 
-CombatGroup:AddToggle('SilentAim', {
-    Text = 'Silent Aim',
-    Default = false,
-    Tooltip = 'Bullets redirect to target head',
-    Callback = function(state)
-        if state then silent() else unsilent() end
-    end,
-})
+local function gethm()
+    local ch = getch()
+    if ch:FindFirstChildOfClass("Humanoid") then return ch:FindFirstChildOfClass("Humanoid") end
+    repeat task.wait() until ch:FindFirstChildOfClass("Humanoid")
+    return ch:FindFirstChildOfClass("Humanoid")
+end
 
-CombatGroup:AddToggle('Laser', {
-    Text = 'Laser (Auto/No Spread)',
-    Default = false,
-    Callback = function(state) laser(state) end,
-})
+local function gethp()
+    local ch = getch()
+    if ch:FindFirstChild("HumanoidRootPart") then return ch:FindFirstChild("HumanoidRootPart") end
+    repeat task.wait() until ch:FindFirstChild("HumanoidRootPart")
+    return ch:FindFirstChild("HumanoidRootPart")
+end
 
-CombatGroup:AddInput('KillTarget', {
-    Text = 'Target name',
-    Default = '',
-    Placeholder = 'Enter player name',
-})
+local function findpl(arg)
+    if not arg or arg == "" then return nil, "No player name given" end
+    arg = arg:lower():gsub("%s+", "")
+    local exact, prefix = {}, {}
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= localp then
+            local name = p.Name:lower()
+            local display = (p.DisplayName or ""):lower():gsub("%s+", "")
+            if name == arg or display == arg then table.insert(exact, p)
+            elseif name:sub(1, #arg) == arg or display:sub(1, #arg) == arg then table.insert(prefix, p) end
+        end
+    end
+    local candidates = #exact > 0 and exact or prefix
+    if #candidates == 0 then return nil, 'Player "' .. arg .. '" Not Found' end
+    if #candidates > 1 then table.sort(candidates, function(a, b) return #a.Name < #b.Name end) end
+    return candidates[1]
+end
 
-CombatGroup:AddButton({
-    Text = 'Kill Player',
-    Func = function()
-        local name = Options.KillTarget.Value
-        if name and name ~= '' then kill(name) end
-    end,
-})
+-- ========== TEAM CHANGE ==========
+local function crim2()
+    local hp = gethp()
+    if not hp then return end
+    hp.CFrame = CFrame.new(-975, 108, 2071)
+    repeat task.wait() until localp.Team and localp.Team.Name == "Criminals"
+end
+
+local function change(teamn)
+    if teamn == "Inmates" then
+        repeat
+            local Event = storage.Remotes.RequestTeamChange
+            Event:InvokeServer(team.Neutral, 1)
+            Event:InvokeServer(team.Inmates, 1)
+            if localp.PlayerGui.Home.IntroFrame.ContentBackground.MainMenuFrame.TeamsFrame.Inmates.Button.TextLabel.Text ~= "Join" then
+                notify("Monarch Hub", "Team full cant do", 5) break
+            end
+        until localp.Team and localp.Team.Name == "Inmates"
+    elseif teamn == "Guards" then
+        repeat
+            local Event = storage.Remotes.RequestTeamChange
+            Event:InvokeServer(team.Neutral, 1)
+            Event:InvokeServer(team.Guards, 1)
+            if localp.PlayerGui.Home.IntroFrame.ContentBackground.MainMenuFrame.TeamsFrame.Guards.Button.TextLabel.Text ~= "Join" then
+                notify("Monarch Hub", "Team full cant do", 5) break
+            end
+        until localp.Team and localp.Team.Name == "Guards"
+    elseif teamn == "Criminals" then
+        repeat
+            local Event = storage.Remotes.RequestTeamChange
+            Event:InvokeServer(team.Neutral, 1)
+            Event:InvokeServer(team.Inmates, 1)
+            if localp.PlayerGui.Home.IntroFrame.ContentBackground.MainMenuFrame.TeamsFrame.Inmates.Button.TextLabel.Text ~= "Join" then
+                notify("Monarch Hub", "Team full cant do", 5) break
+            end
+        until localp.Team and localp.Team.Name == "Inmates"
+        task.wait(0.1)
+        crim2()
+        repeat task.wait() until not (getch() and getch():FindFirstChild("ForceField"))
+    end
+end
+
+-- ========== KILL (with invisible) ==========
+local invisiblebool, invisibleconn, invisiblebind, invisanimtrack, invisoldcf = false, nil, nil, nil, nil
+
+local function animationTrickery()
+    local ch = getch() local hm = gethm()
+    if not ch or not hm then return end
+    local isR15 = hm.RigType == Enum.HumanoidRigType.R15
+    local anim = Instance.new("Animation")
+    anim.AnimationId = "rbxassetid://" .. (isR15 and "18665825805" or "215384594")
+    local animator = hm:FindFirstChildOfClass("Animator") or hm:WaitForChild("Animator", 3)
+    if not animator then return end
+    if invisanimtrack then pcall(function() invisanimtrack:Stop() invisanimtrack:Destroy() end) invisanimtrack = nil end
+    invisanimtrack = animator:LoadAnimation(anim)
+    invisanimtrack.Priority = Enum.AnimationPriority.Action4
+    invisanimtrack:Play(0, 0.001, 0)
+    anim:Destroy()
+    task.delay(0.05, function()
+        if invisanimtrack and invisanimtrack.IsPlaying then
+            invisanimtrack.TimePosition = isR15 and 1.95 or 0.4
+            invisanimtrack:AdjustSpeed(0)
+        end
+    end)
+end
+
+local function invisible()
+    if invisiblebool then return end
+    invisiblebool = true invisoldcf = nil
+    animationTrickery()
+    local bindKey = "Invis_" .. tostring(tick())
+    invisiblebind = bindKey
+    pcall(function()
+        RunService:BindToRenderStep(bindKey, Enum.RenderPriority.Camera.Value - 1, function()
+            if not invisiblebool then return end
+            local ch = localp.Character
+            local root = ch and ch:FindFirstChild("HumanoidRootPart")
+            if root and invisoldcf then
+                root.CFrame = invisoldcf
+                if invisanimtrack then pcall(function() invisanimtrack:AdjustWeight(0.001) end) end
+            end
+        end)
+    end)
+    if invisibleconn then invisibleconn:Disconnect() invisibleconn = nil end
+    invisibleconn = RunService.Heartbeat:Connect(function()
+        if not invisiblebool then return end
+        local ch = localp.Character if not ch then return end
+        local hm = ch:FindFirstChildOfClass("Humanoid")
+        local root = ch:FindFirstChild("HumanoidRootPart")
+        if not (hm and root) then return end
+        if not invisanimtrack or not invisanimtrack.IsPlaying then animationTrickery() end
+        local isR15 = hm.RigType == Enum.HumanoidRigType.R15
+        local offset = Vector3.new(0, hm.HipHeight + (root.Size.Y / 2) - 1, 0)
+        invisoldcf = root.CFrame
+        root.CFrame = (root.CFrame - offset) * CFrame.Angles(math.rad(isR15 and 180 or 90), 0, 0)
+        if invisanimtrack then
+            pcall(function() invisanimtrack:AdjustWeight(100) invisanimtrack:AdjustSpeed(0) end)
+        end
+    end)
+    notify("Monarch Hub", "Invisible Enabled", 3)
+end
+
+local function uninvisible()
+    if not invisiblebool then return end
+    invisiblebool = false
+    if invisibleconn then invisibleconn:Disconnect() invisibleconn = nil end
+    if invisiblebind then pcall(function() RunService:UnbindFromRenderStep(invisiblebind) end) invisiblebind = nil end
+    if invisanimtrack then pcall(function() invisanimtrack:Stop() invisanimtrack:Destroy() end) invisanimtrack = nil end
+    local ch = localp.Character
+    local root = ch and ch:FindFirstChild("HumanoidRootPart")
+    if root and invisoldcf then root.CFrame = invisoldcf end
+    invisoldcf = nil
+    notify("Monarch Hub", "Invisible Disabled", 3)
+end
+
+local function kill(arg)
+    local player, err = findpl(arg)
+    if not player then notify("Monarch Hub", err, 5) return end
+    local ogt = localp.Team.Name
+    local ch = player.Character
+    if not ch then notify("Monarch Hub", "Target Character Not Found", 5) return end
+    local target = ch:FindFirstChild("HumanoidRootPart")
+    if not target then notify("Monarch Hub", "Target Character Not Found", 5) return end
+    if ch:FindFirstChild("ForceField") then
+        notify("Monarch Hub", "Waiting for ForceField", 5)
+        repeat task.wait(0.1) until not ch:FindFirstChild("ForceField")
+    end
+    if player.Team and player.Team.Name == "Guards" and localp.Team and localp.Team.Name == "Guards" then change("Inmates") end
+    local ch1 = getch()
+    if localp.Team and localp.Team.Name == "Criminals" and ch1 and ch1:FindFirstChild("ForceField") then
+        notify("Monarch Hub", "Waiting for ForceField", 5)
+        repeat task.wait(0.1) until not ch1:FindFirstChild("ForceField")
+    end
+    local hp = gethp() local hm = gethm() local og = hp.CFrame
+    invisible()
+    local Event = storage.meleeEvent
+    repeat
+        if hm.Health == 0 then cam.CameraSubject = gethm() break end
+        cam.CameraSubject = ch.Humanoid
+        Event:FireServer(player, 1, 1)
+        hp.CFrame = target.CFrame * CFrame.new(0, -2.5, 0)
+        hm:ChangeState(3)
+        task.wait()
+    until ch.Humanoid.Health == 0
+    for _, trac in pairs(gethm():GetPlayingAnimationTracks()) do trac:Stop() end
+    uninvisible()
+    if ogt == "Guards" then change(ogt) end
+    hp.CFrame = og
+    cam.CameraSubject = gethm()
+end
+
+-- ========== ARREST ==========
+local function animh()
+    local hum = gethm() if not hum then return end
+    local animator = hum:FindFirstChildOfClass("Animator") or hum:WaitForChild("Animator", 2)
+    if not animator then return end
+    local anim = Instance.new("Animation") anim.AnimationId = "rbxassetid://215384594"
+    local anim1 = Instance.new("Animation") anim1.AnimationId = "rbxassetid://279229192"
+    local track = animator:LoadAnimation(anim) track:Play() track.TimePosition = 2 track:AdjustSpeed(0)
+    local track1 = animator:LoadAnimation(anim1) track1:Play() track1.TimePosition = 2 track1:AdjustSpeed(0)
+end
+
+local function arrest(arg)
+    local player, err = findpl(arg)
+    if not player then notify("Monarch Hub", err or "Player not found", 5) return end
+    local ch = player.Character
+    if not ch then notify("Monarch Hub", "Target Character Not Found", 5) return end
+    local target = ch:FindFirstChild("HumanoidRootPart")
+    if not target then notify("Monarch Hub", "Target Character Not Found", 5) return end
+    if not ch:GetAttribute("Hostile") then notify("Monarch Hub", "Cant arrest, not hostile", 5) return end
+    local ogt = localp.Team and localp.Team.Name or "Inmates"
+    if localp.Team and localp.Team.Name ~= "Guards" then
+        change("Guards")
+        repeat task.wait(0.1) until localp:FindFirstChild("Backpack") and localp.Backpack:FindFirstChild("Handcuffs")
+    end
+    local event = storage.Remotes.ArrestPlayer
+    local hp = gethp() local ch1 = getch()
+    if not hp or not ch1 then notify("Monarch Hub", "Local character not found", 5) return end
+    if ch:FindFirstChild("ForceField") then
+        notify("Monarch Hub", "Waiting for ForceField", 5)
+        repeat task.wait(0.1) until not ch:FindFirstChild("ForceField")
+    end
+    local og = hp.CFrame
+    for _, v in pairs(ch1:GetChildren()) do if v:IsA("Tool") then v.Parent = localp.Backpack end end
+    if not ch1:FindFirstChild("Handcuffs") then
+        if not localp.Backpack:FindFirstChild("Handcuffs") then notify("Monarch Hub", "Must be in Guards team!", 5) return end
+        localp.Backpack.Handcuffs.Parent = ch1
+    end
+    animh()
+    for i = 1, 10 do
+        pcall(function() event:InvokeServer(player, 1) end)
+        if hp and hp.Parent and target and target.Parent then hp.CFrame = target.CFrame end
+        task.wait()
+    end
+    local humanoid = gethm()
+    if humanoid then for _, trac in pairs(humanoid:GetPlayingAnimationTracks()) do trac:Stop() end end
+    change(ogt)
+    repeat task.wait() until getch() and getch():FindFirstChild("HumanoidRootPart")
+    local newHp = gethp()
+    if newHp then newHp.CFrame = og end
+end
+
+-- ========== NOCLIP ==========
+local noclipbool = false
+local noclipConn = nil
+local function setNoclipParts(char, canCollide)
+    if not char then return end
+    for _, v in pairs(char:GetDescendants()) do
+        if v:IsA("BasePart") then v.CanCollide = canCollide end
+    end
+end
+local function noclip()
+    pcall(function()
+        local sf = storage:FindFirstChild("Scripts")
+        if sf then local cc = sf:FindFirstChild("CharacterCollision") if cc then cc:Destroy() end end
+    end)
+    if noclipbool then return end
+    noclipbool = true
+    task.spawn(function()
+        while noclipbool do
+            local ch = getch()
+            if ch then
+                for _, v in pairs(ch:GetChildren()) do if v:IsA("BasePart") then v.CanCollide = false end end
+            end
+            task.wait()
+        end
+    end)
+    if noclipConn then noclipConn:Disconnect() end
+    noclipConn = localp.CharacterAdded:Connect(function(char)
+        task.wait(0.1) if noclipbool then setNoclipParts(char, false) end
+    end)
+end
+local function unnoclip()
+    noclipbool = false
+    if noclipConn then noclipConn:Disconnect() noclipConn = nil end
+    local ch = getch()
+    if ch then
+        if ch:FindFirstChild("Head") then ch.Head.CanCollide = true end
+        if ch:FindFirstChild("Torso") then ch.Torso.CanCollide = true end
+        if ch:FindFirstChild("UpperTorso") then ch.UpperTorso.CanCollide = true end
+        if ch:FindFirstChild("LowerTorso") then ch.LowerTorso.CanCollide = true end
+        if ch:FindFirstChild("HumanoidRootPart") then ch.HumanoidRootPart.CanCollide = true end
+        setNoclipParts(ch, true)
+    end
+end
+
+-- ========== CRIM / AUTOG / LASER / AUTORE / KICK ==========
+-- (Identical to the native-UI version; functions are self-contained.)
+-- [Paste the crim(), autog()/unautog(), laser()/unlaser(),
+--  autore()/unautore(), kick()/unkick() functions here exactly as
+--  they appear in the native-UI script, since they don't depend on the UI.]
+
+-- ========== SILENT AIM ==========
+local silentAimEnabled = false
+local aimPart = "Head" local wallCheck = true local fov = 360 local teamCheck = true
+
+local function canDamage(plr)
+    local char = plr.Character
+    if not char then return false end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum or hum.Health <= 0 then return false end
+    if char:FindFirstChild("ForceField") then return false end
+    if teamCheck and localp.Team and plr.Team and localp.Team == plr.Team then return false end
+    return true
+end
+
+local function isVisible(char, origin)
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = localp.Character and { localp.Character } or {}
+    for _, part in ipairs({ char:FindFirstChild(aimPart), char:FindFirstChild("Head"), char:FindFirstChild("HumanoidRootPart") }) do
+        if not part then continue end
+        local dir = part.Position - origin
+        if dir.Magnitude <= 0 then continue end
+        local result = Workspace:Raycast(origin, dir, params)
+        if not result or result.Instance:FindFirstAncestorOfClass("Model") == char then return part end
+    end
+    return nil
+end
+
+local function getTarget(origin)
+    local cam = Workspace.CurrentCamera if not cam then return nil end
+    local vps = cam.ViewportSize
+    local center = Vector2.new(vps.X / 2, vps.Y / 2)
+    local bestDist = fov local bestPart = nil
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr == localp or not canDamage(plr) then continue end
+        local char = plr.Character if not char then continue end
+        local part = char:FindFirstChild(aimPart) or char:FindFirstChild("Head")
+        if not part then continue end
+        local pos, onScreen = cam:WorldToViewportPoint(part.Position)
+        if not onScreen then continue end
+        if (part.Position - cam.CFrame.Position):Dot(cam.CFrame.LookVector) <= 0 then continue end
+        local sDist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+        if sDist >= bestDist then continue end
+        if wallCheck then
+            local visPart = isVisible(char, origin)
+            if not visPart then continue end
+            part = visPart
+        end
+        bestPart = part bestDist = sDist
+    end
+    return bestPart
+end
+
+local function getAttr(tool, attr)
+    if typeof(tool) == "Instance" then
+        local ok, val = pcall(function() return tool:GetAttribute(attr) end)
+        if ok then return val end
+    end
+    return nil
+end
+
+local function normalCast(p1, p2, p3)
+    local origin, aim, tool
+    if typeof(p1) == "Vector3" then
+        origin = p1
+        if typeof(p2) == "Vector3" then aim = p2 elseif typeof(p3) == "Vector3" then aim = p3 end
+        if typeof(p2) == "Instance" then tool = p2 elseif typeof(p3) == "Instance" then tool = p3 end
+    else
+        tool = p1
+        if typeof(p2) == "Vector3" then origin = p2 end
+        if typeof(p3) == "Vector3" then aim = p3 elseif typeof(p2) == "Vector3" then aim = p2 end
+    end
+    if not origin or not aim then return nil, Vector3.new() end
+    local dir = aim - origin
+    if dir.Magnitude <= 0 then dir = Vector3.new(0, 0, -1) end
+    local range = getAttr(tool, "Range") or 200
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = localp.Character and { localp.Character } or {}
+    params.CollisionGroup = "ClientBullet"
+    local result = Workspace:Raycast(origin, dir.Unit * range, params)
+    if result then return result.Instance, result.Position end
+    return nil, origin + dir.Unit * range
+end
+
+local function hookCast(p1, p2, p3)
+    local origin
+    if typeof(p1) == "Vector3" then origin = p1 elseif typeof(p2) == "Vector3" then origin = p2 elseif typeof(p3) == "Vector3" then origin = p3 end
+    if not silentAimEnabled then return normalCast(p1, p2, p3) end
+    if origin then
+        local char = localp.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if root and (origin - root.Position).Magnitude <= 75 then
+            local target = getTarget(origin)
+            if target and target.Parent then return target, target.Position end
+        end
+    end
+    return normalCast(p1, p2, p3)
+end
+
+local function ensureHook()
+    if _G.silentAimHooked then return end
+    _G.silentAimHooked = true
+    task.spawn(function()
+        local hooked = 0
+        for _, func in next, getgc(true) do
+            if type(func) == "function" then
+                local info = debug.getinfo(func, "nS")
+                if info and info.name == "castRay" then
+                    pcall(hookfunction, func, hookCast)
+                    hooked = hooked + 1
+                end
+            end
+            if hooked >= 5 then break end
+        end
+    end)
+end
+
+local function silent()
+    silentAimEnabled = not silentAimEnabled
+    if silentAimEnabled then ensureHook() notify("Monarch Hub", "Silent Aim Enabled", 3)
+    else notify("Monarch Hub", "Silent Aim Disabled", 3) end
+end
+local function unsilent()
+    if silentAimEnabled then silentAimEnabled = false notify("Monarch Hub", "Silent Aim Disabled", 3) end
+end
+
+-- ========== BUILD UI ==========
+local Window = Library:CreateWindow({ Title = "Monarch Hub" })
+local Tabs = {
+    Combat = Window:AddTab("Combat"),
+    Movement = Window:AddTab("Movement"),
+    Team = Window:AddTab("Team & Auto"),
+    Misc = Window:AddTab("Misc"),
+    Settings = Window:AddTab("Settings"),
+}
+
+-- Combat Tab
+local CombatSection = Tabs.Combat:AddSection("Combat")
+CombatSection:AddToggle({ text = "Silent Aim", flag = "silentAim", callback = function(state) if state then silent() else unsilent() end end })
+CombatSection:AddToggle({ text = "Laser (Auto/No Spread)", flag = "laser", callback = function(state) laser(state) end })
+CombatSection:AddInput({ text = "Target Name", flag = "targetName" })
+CombatSection:AddButton({ text = "Kill Player", callback = function() local n = Library.flags.targetName if n and n ~= "" then kill(n) else notify("Monarch Hub", "Enter a target name first", 3) end end })
+CombatSection:AddButton({ text = "Arrest Player", callback = function() local n = Library.flags.targetName if n and n ~= "" then arrest(n) else notify("Monarch Hub", "Enter a target name first", 3) end end })
 
 -- Movement Tab
-local MoveGroup = Tabs.Movement:AddLeftGroupbox('Movement')
-MoveGroup:AddToggle('Noclip', { Text = 'Noclip', Default = false, Callback = function(s) if s then noclip() else unnoclip() end end })
+local MoveSection = Tabs.Movement:AddSection("Movement")
+MoveSection:AddToggle({ text = "Noclip", flag = "noclip", callback = function(state) if state then noclip() else unnoclip() end end })
 
 -- Team Tab
-local TeamGroup = Tabs.Team:AddLeftGroupbox('Team')
-TeamGroup:AddButton({ Text = 'Become Criminal', Func = function() crim() end })
-TeamGroup:AddToggle('AutoGuns', { Text = 'Auto Guns', Default = false, Callback = function(s) if s then autog() else unautog() end end })
-TeamGroup:AddToggle('AutoRespawn', { Text = 'Auto Respawn', Default = false, Callback = function(s) if s then autore() else unautore() end end })
+local TeamSection = Tabs.Team:AddSection("Team")
+TeamSection:AddButton({ text = "Become Criminal", callback = function() crim() end })
+TeamSection:AddInput({ text = "Team (Inmates/Guards/Criminals)", flag = "teamName" })
+TeamSection:AddButton({ text = "Change Team", callback = function() local t = Library.flags.teamName if t and t ~= "" then change(t) end end })
+local AutoSection = Tabs.Team:AddSection("Automation")
+AutoSection:AddToggle({ text = "Auto Guns (AK + Remington)", flag = "autog", callback = function(state) if state then autog() else unautog() end end })
+AutoSection:AddToggle({ text = "Auto Respawn", flag = "autore", callback = function(state) if state then autore() else unautore() end end })
 
 -- Misc Tab
-local MiscGroup = Tabs.Misc:AddLeftGroupbox('Misc')
-MiscGroup:AddInput('KickTarget', { Text = 'Target name', Default = '', Placeholder = 'Enter player name' })
-MiscGroup:AddButton({ Text = 'Car Kick', Func = function()
-    local name = Options.KickTarget.Value
-    if name and name ~= '' then kick(name) end
-end })
-MiscGroup:AddButton({ Text = 'Stop Kick', Func = function() unkick() end })
+local MiscSection = Tabs.Misc:AddSection("Car Kick")
+MiscSection:AddInput({ text = "Target Name", flag = "kickTarget" })
+MiscSection:AddButton({ text = "Car Kick Player", callback = function() local n = Library.flags.kickTarget if n and n ~= "" then kick(n) end end })
+MiscSection:AddButton({ text = "Stop Car Kick", callback = function() unkick() end })
 
--- UI Settings
-local MenuGroup = Tabs['UI Settings']:AddLeftGroupbox('Menu')
-MenuGroup:AddButton({ Text = 'Unload', Func = function() Library:Unload() end })
-MenuGroup:AddLabel('Menu bind'):AddKeyPicker('MenuKeybind', { Default = 'End', NoUI = true, Text = 'Menu keybind' })
-Library.ToggleKeybind = Options.MenuKeybind
-
--- Addons
-ThemeManager:SetLibrary(Library)
-SaveManager:SetLibrary(Library)
-SaveManager:IgnoreThemeSettings()
-SaveManager:SetIgnoreIndexes({'MenuKeybind'})
-ThemeManager:SetFolder('MonarchHub')
-SaveManager:SetFolder('MonarchHub/prison-life')
-SaveManager:BuildConfigSection(Tabs['UI Settings'])
-ThemeManager:ApplyToTab(Tabs['UI Settings'])
-
-print('[Monarch Hub] Loaded with Obsidian UI.')
+-- Settings Tab
+local SettingsSection = Tabs.Settings:AddSection("Menu")
+SettingsSection:AddButton({ text = "Unload", callback = function() Library:Unload() end })
